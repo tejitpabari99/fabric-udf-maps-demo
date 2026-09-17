@@ -4,6 +4,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const cfg = require("./lib/config");
+const { getPmtilesTile } = require("./lib/pmtiles");
 const registry = require("./sources");
 
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
@@ -39,6 +40,32 @@ const server = http.createServer(async (req, res) => {
 
   if (url === "/api/config") {
     return sendJson(res, 200, { mapsKey: cfg.mapsKey, sources: registry.describe() });
+  }
+
+  const pmtilesMatch = url.match(/^\/api\/pmtiles\/(\d+)\/(\d+)\/(\d+)\.mvt$/);
+  if (pmtilesMatch) {
+    const method = q.get("method");
+    if (method !== "function" && method !== "direct") {
+      return sendJson(res, 400, { error: "PMTiles method must be 'function' or 'direct'." });
+    }
+
+    const [, z, x, y] = pmtilesMatch.map(Number);
+    try {
+      const tile = await getPmtilesTile(cfg, method, z, x, y);
+      if (!tile) {
+        res.writeHead(204, { "Cache-Control": "public, max-age=3600" });
+        return res.end();
+      }
+      res.writeHead(200, {
+        "Content-Type": "application/x-protobuf",
+        "Content-Length": tile.length,
+        "Cache-Control": "public, max-age=3600",
+      });
+      return res.end(tile);
+    } catch (err) {
+      console.error(`[/api/pmtiles/${z}/${x}/${y}.mvt method=${method}]`, err.message);
+      return sendJson(res, 502, { error: err.message });
+    }
   }
 
   if (url === "/api/data") {

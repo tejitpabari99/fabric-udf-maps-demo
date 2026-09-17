@@ -43,6 +43,8 @@ function initMap(subscriptionKey) {
   });
 
   map.events.add("ready", () => {
+    window.__map = map;
+
     // Standard map controls + a style picker (all supported Azure Maps styles).
     map.controls.add(
       [
@@ -100,8 +102,9 @@ const renderers = {
     fitTo(geojson);
     return n;
   },
-  // pmtiles renderer is registered by pmtiles.render.js if that source is present.
+  // PMTiles renderer is registered by render-pmtiles.js.
 };
+window.renderers = renderers;
 
 function fitTo(geojson) {
   try {

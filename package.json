@@ -11,6 +11,7 @@
     "node": ">=18"
   },
   "dependencies": {
-    "mssql": "^12.7.2"
+    "mssql": "^12.7.2",
+    "pmtiles": "^4.5.0"
   }
 }
