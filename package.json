@@ -1,0 +1,13 @@
+{
+  "name": "fabric-udf-maps-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Render a Fabric Lakehouse GeoJSON (served via a Fabric User Data Function) on an Azure Maps web app.",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server/server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

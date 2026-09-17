@@ -1,0 +1,15 @@
+# Local secrets / config — never commit
+.env
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Python (Fabric UDF local dev)
+fabric-udf/.venv/
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db

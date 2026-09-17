@@ -1,0 +1,125 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+#topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  background: #0b3d5c;
+  color: #fff;
+  z-index: 5;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+#topbar .title {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+#topbar .controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#source-select {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 12px;
+  max-width: 320px;
+}
+
+#source-select option {
+  color: #000;
+}
+
+.pill {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+#topbar button {
+  background: #1a6fa3;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+#topbar button:hover {
+  background: #2487c4;
+}
+
+#map {
+  position: absolute;
+  top: 48px;
+  bottom: 0;
+  left: 0;
+  right: 0;
+}
+
+.status {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  z-index: 5;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  max-width: 60%;
+  display: none;
+}
+
+.status.show {
+  display: block;
+}
+
+.status.error {
+  background: rgba(150, 20, 20, 0.9);
+}
+
+.atlas-popup-content {
+  padding: 12px;
+  font-size: 13px;
+  max-width: 280px;
+}
+
+.atlas-popup-content h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: #0b3d5c;
+}
+
+.atlas-popup-content table {
+  border-collapse: collapse;
+}
+
+.atlas-popup-content td {
+  padding: 2px 6px 2px 0;
+  vertical-align: top;
+}
+
+.atlas-popup-content td.k {
+  color: #666;
+  font-weight: 600;
+  white-space: nowrap;
+}

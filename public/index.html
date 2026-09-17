@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, shrink-to-fit=no" />
+  <title>Fabric Lakehouse → UDF → Azure Maps</title>
+  <link rel="stylesheet" href="https://atlas.microsoft.com/sdk/javascript/mapcontrol/3/atlas.min.css" type="text/css" />
+  <script src="https://atlas.microsoft.com/sdk/javascript/mapcontrol/3/atlas.min.js"></script>
+  <link rel="stylesheet" href="./styles.css" type="text/css" />
+</head>
+<body>
+  <header id="topbar">
+    <div class="title">Car Parks — Fabric Lakehouse via User Data Function</div>
+    <div class="controls">
+      <select id="source-select" title="Data retrieval method (POC)"></select>
+      <span id="source-pill" class="pill">source: …</span>
+      <span id="count-pill" class="pill">features: …</span>
+      <button id="reload" title="Reload data">Load</button>
+    </div>
+  </header>
+  <div id="map"></div>
+  <div id="status" class="status"></div>
+  <script src="./app.js"></script>
+</body>
+</html>
