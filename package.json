@@ -11,6 +11,7 @@
     "node": ">=18"
   },
   "dependencies": {
+    "@azure/identity": "^4.13.3",
     "mssql": "^12.7.2",
     "pmtiles": "^4.5.0"
   }

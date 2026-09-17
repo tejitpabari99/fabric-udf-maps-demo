@@ -2,12 +2,16 @@
 
 // Shared helpers used by all data-source modules.
 //
-// Auth model: every authenticated call gets a Microsoft Entra token from the
-// Azure CLI (`az account get-access-token --resource <audience>`). Whoever runs
-// the server just needs to be `az login`'d with access to the workspace. The
-// browser never sees these tokens — this server is a Backend-for-Frontend (BFF).
+// Auth model: every authenticated call gets a Microsoft Entra token from
+// @azure/identity's DefaultAzureCredential, so the SAME code works with:
+//   - a Service Principal locally (env: AZURE_TENANT_ID / AZURE_CLIENT_ID /
+//     AZURE_CLIENT_SECRET) — no `az login` needed;
+//   - a Managed Identity when hosted in Azure;
+//   - the developer's `az login` as a fallback (AzureCliCredential is in the chain).
+// The browser never sees these tokens — this server is a Backend-for-Frontend (BFF).
+// See docs/managed-identity-setup.md.
 
-const { execFile } = require("child_process");
+const { DefaultAzureCredential } = require("@azure/identity");
 
 const RESOURCES = {
   storage: "https://storage.azure.com",                 // OneLake / ADLS
@@ -17,25 +21,36 @@ const RESOURCES = {
   sql: "https://database.windows.net",                   // Fabric SQL analytics endpoint (TDS)
 };
 
+// One credential instance (reuses its in-memory token cache). Optionally pin to a
+// user-assigned managed identity via AZURE_MANAGED_IDENTITY_CLIENT_ID.
+const _credential = new DefaultAzureCredential(
+  process.env.AZURE_MANAGED_IDENTITY_CLIENT_ID
+    ? { managedIdentityClientId: process.env.AZURE_MANAGED_IDENTITY_CLIENT_ID }
+    : undefined
+);
+
 const _tokenCache = new Map();
 
-function getAzToken(resource) {
+// Acquire a bearer token for a resource audience (e.g. RESOURCES.storage).
+// The v2 scope for app/resource access is "<audience>/.default".
+async function getAzToken(resource) {
   const cached = _tokenCache.get(resource);
-  if (cached && cached.exp > Date.now() + 60_000) return Promise.resolve(cached.tok);
-  return new Promise((resolve, reject) => {
-    execFile(
-      "az",
-      ["account", "get-access-token", "--resource", resource, "--query", "accessToken", "-o", "tsv"],
-      { shell: true, maxBuffer: 10 * 1024 * 1024 },
-      (err, stdout, stderr) => {
-        if (err) return reject(new Error("az token failed for " + resource + ": " + (stderr || err.message)));
-        const tok = stdout.trim();
-        if (!tok) return reject(new Error("az returned an empty token for " + resource + ". Run `az login`."));
-        _tokenCache.set(resource, { tok, exp: Date.now() + 30 * 60_000 });
-        resolve(tok);
-      }
+  if (cached && cached.exp > Date.now() + 60_000) return cached.tok;
+  const scope = resource.replace(/\/+$/, "") + "/.default";
+  let result;
+  try {
+    result = await _credential.getToken(scope);
+  } catch (err) {
+    throw new Error(
+      `Failed to acquire a token for ${resource}: ${err.message}. ` +
+      "Set AZURE_TENANT_ID/AZURE_CLIENT_ID/AZURE_CLIENT_SECRET (service principal), " +
+      "run in Azure with a managed identity, or `az login`."
     );
-  });
+  }
+  if (!result || !result.token) throw new Error(`Empty token for ${resource}.`);
+  const exp = result.expiresOnTimestamp || Date.now() + 30 * 60_000;
+  _tokenCache.set(resource, { tok: result.token, exp });
+  return result.token;
 }
 
 // Read a whole file from a Lakehouse Files area (OneLake DFS).
