@@ -1,32 +1,42 @@
-# Eventstream
+# London bicycles: Eventstream landing table
 
-The `Bicycle-eventstream` source represents the Fabric Eventstream `SampleES`
-(`sample-bicycles`). It is real-time data, so enabling the UI real-time toggle
-re-runs the selected method at the chosen interval. Each fetch requests the
-newest 100 rows and converts valid `Latitude` / `Longitude` pairs into GeoJSON
-Points with coordinates `[longitude, latitude]`.
+This source renders live London bicycle events from Fabric Eventstream
+`SampleES`, whose source is `sample-bicycles`. The Eventstream lands events in
+table `BicycleES` in KQL database `BicycleES`.
 
-An Eventstream must write to a destination before its events can be queried.
-The current `SampleES` definition has no destination, and neither known
-Eventhouse contains a bicycle table:
+Rows include `Latitude`, `Longitude`, `No_Bikes`, `No_Empty_Docks`, `Street`,
+`Neighbourhood`, and `BikepointID`.
 
-- `TejitEH` contains `Weather` and `Tejit LH Data`.
-- `TejitEV` contains `airports`.
+![Live bicycle events rendered on Azure Maps](eventstream.png)
 
-Until a KQL database destination is added, Direct returns an empty
-`FeatureCollection` with a server warning and the UDF returns an empty list.
-After adding the destination, set `EVENTSTREAM_KUSTO_URI`,
-`EVENTSTREAM_KUSTO_DB`, and `EVENTSTREAM_TABLE`; also update the matching
-constants in `fabric-udf/eventstream/function_app.py` and redeploy it.
+## Create the Eventstream destination
+
+An Eventstream source is not queryable until it writes to a destination:
+
+1. Open Eventstream `SampleES` in the Fabric portal.
+2. Confirm its source is `sample-bicycles`.
+3. Select **Add destination > Eventhouse**.
+4. Choose or create a KQL database named `BicycleES`.
+5. Choose or create a destination table named `BicycleES` and map the incoming
+   bicycle fields.
+6. Start/publish the Eventstream and confirm that events are landing.
+
+The `sample-bicycles` source continuously produces events, so the
+`BicycleES` row count should keep increasing.
+
+The destination is on:
+
+```text
+https://trd-tne4bs58upcvrph9ak.z1.kusto.fabric.microsoft.com
+```
 
 ## Function
 
-The proxy invokes the published `get_bikes` Fabric User Data Function with an
-empty body. Once configured, the UDF uses `azure-kusto-data` and its runtime's
-system managed identity to query the landing table:
+`EventstreamApi.get_bikes` uses `azure-kusto-data` and the UDF runtime's
+managed identity to query the newest approximately 100 rows:
 
 ```kusto
-table("<destination table>")
+table("BicycleES")
 | where isnotnull(Latitude) and isnotnull(Longitude)
 | extend __ingestion_time = ingestion_time()
 | order by __ingestion_time desc nulls last
@@ -34,25 +44,82 @@ table("<destination table>")
 | project-away __ingestion_time
 ```
 
-It returns a JSON-serializable list of row objects, converting datetime values
-to ISO 8601 strings. The proxy converts the list to a GeoJSON
-`FeatureCollection` using `Latitude` and `Longitude`.
+Kusto/Eventhouse is not a supported UDF managed connection. The function uses
+`DefaultAzureCredential` with an Azure token-credential builder when
+available, then falls back to the SDK managed-identity builders.
 
-Fabric UDFs cannot use a managed Kusto connection, so this function calls Kusto
-through the SDK. The UDF runtime identity must be granted access to the
-Eventhouse/database; deployment and publishing can succeed even if that
-authorization is missing, but invocation will fail until access is granted.
-See the [common UDF guide](../common-udf-guide.md) for deployment, publishing,
-and endpoint configuration.
+The proxy invokes the published UDF with a token for
+`https://analysis.windows.net/powerbi/api` and converts the returned rows to
+GeoJSON points.
 
 ## Direct
 
-The local proxy uses the same newest-first Kusto query against the configured
-landing table. It acquires an Azure CLI token for
-`https://api.kusto.windows.net`, posts the query to `/v2/rest/query`, and
-converts rows to GeoJSON points using `Latitude` and `Longitude`.
+The proxy runs the same newest-first query against KQL database/table
+`BicycleES` through Kusto REST. It obtains a token for
+`https://api.kusto.windows.net`; normal queries use `/v2/rest/query`.
 
-If the landing table exists but has not received data yet, the result is an
-empty `FeatureCollection`. If no destination is configured, the proxy does not
-attempt a Kusto request and returns the same empty result with a helpful
-warning.
+The UI's real-time toggle controls repeated fetches. Available intervals are 5
+seconds, 10 seconds, 30 seconds, 1 minute, and 5 minutes. When the toggle is
+off, the browser does not re-fetch automatically.
+
+## Setup & permissions
+
+1. Create the Eventstream destination as described above and verify that
+   `BicycleES` is receiving rows.
+2. From `fabric-udf`, create the UDF item and upload its definition:
+
+   ```powershell
+   python deploy_udf.py --spec eventstream/spec.json --script eventstream/function_app.py
+   ```
+
+   `eventstream/spec.json` creates `EventstreamApi` and includes
+   `azure-kusto-data` as a PyPI library. To update an existing item, add
+   `--udf <udf-id>`.
+3. There is no managed Kusto connection or `connectedDataSources` binding for
+   this UDF. It uses the UDF runtime managed identity.
+4. In the portal, open `EventstreamApi`, select **Develop > Publish**, wait for
+   publishing, switch to **Run only**, then open
+   `get_bikes > ... > Properties`, confirm **Public access = On**, and copy the
+   Public URL.
+5. Set the landing destination and endpoint in the gitignored `.env` file:
+
+   ```text
+   EVENTSTREAM_KUSTO_URI=https://trd-tne4bs58upcvrph9ak.z1.kusto.fabric.microsoft.com
+   EVENTSTREAM_KUSTO_DB=BicycleES
+   EVENTSTREAM_TABLE=BicycleES
+   UDF_EVENTSTREAM_ENDPOINT=<published get_bikes URL>
+   ```
+
+6. Invoke `get_bikes` once. The first call should fail with HTTP 403 and expose
+   a principal such as `aadapp=<clientId>;<tenantId>`.
+7. Copy the complete principal. As a database administrator, run:
+
+   ```kusto
+   .add database BicycleES viewers ('aadapp=<clientId>;<tenantId>') 'Allow EventstreamApi UDF to read live bicycle data'
+   ```
+
+   Run the command in the Eventhouse query editor or submit it to
+   `<cluster>/v1/rest/mgmt`.
+8. Invoke the function again; it should now return bicycle rows.
+
+In this deployment, the `EventstreamApi` managed identity has application ID
+`8ce609ad-383b-4471-9b36-0d42ec532c00`. Copy the complete principal from the
+403 so the tenant ID is included.
+
+The deployer needs write permission on the UDF item. A database administrator
+must grant the UDF identity Database Viewer on database `BicycleES`. The proxy
+runner needs permission to invoke the published UDF.
+
+Allow about two minutes between publishes. See the
+[common UDF guide](../common-udf-guide.md) for the shared deployment and
+managed-identity permission model.
+
+## What the Direct method needs
+
+The identity running the proxy must:
+
+- run `az login`;
+- have Viewer permission on KQL database `BicycleES`; and
+- be able to obtain a token for `https://api.kusto.windows.net`.
+
+The Direct method uses the runner's identity, not the UDF managed identity.

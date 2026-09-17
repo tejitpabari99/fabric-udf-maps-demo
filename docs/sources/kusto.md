@@ -1,45 +1,108 @@
-# Kusto
+# Weather: Eventhouse table
 
-The `tejit-kusto` source renders up to 100 storm-event rows from the Fabric
-Eventhouse table `Weather` as GeoJSON points. Each numeric `BeginLat` /
-`BeginLon` pair becomes a Point with coordinates `[longitude, latitude]`;
-rows without valid coordinates are skipped.
+This source renders up to 100 rows from the `Weather` table in Eventhouse
+database `TejitEH`. Each valid `BeginLat`/`BeginLon` pair becomes a GeoJSON
+point with coordinates `[longitude, latitude]`.
+
+The Fabric Kusto cluster is:
+
+```text
+https://trd-tne4bs58upcvrph9ak.z1.kusto.fabric.microsoft.com
+```
 
 ## Function
 
-The proxy invokes the published `get_weather` Fabric User Data Function with an
-empty body. The UDF uses the `azure-kusto-data` library and its runtime's system
-managed identity to query the `TejitEH` Eventhouse:
+`KustoApi.get_weather` uses the `azure-kusto-data` package to query `TejitEH`:
 
 ```kusto
 Weather
+| where isnotnull(BeginLat) and BeginLat != 0
+  and isnotnull(BeginLon) and BeginLon != 0
 | take 100
 | project BeginLat, BeginLon, State, EventType, StartTime
 ```
 
-It returns a JSON-serializable list of row objects, converting datetime values
-to ISO 8601 strings. The proxy converts the list to a GeoJSON
-`FeatureCollection` using `BeginLat` and `BeginLon`. UDF invocation
-authentication uses an Azure CLI token for
-`https://analysis.windows.net/powerbi/api`.
+Kusto/Eventhouse is not a supported UDF managed connection. The function
+therefore authenticates outbound with the UDF runtime's managed identity,
+using `DefaultAzureCredential` and
+`with_azure_token_credential` when available, with managed-identity builder
+fallbacks for other SDK versions.
 
-Fabric UDFs cannot use a managed Kusto connection, so this function calls Kusto
-over HTTP through the SDK. The UDF runtime identity must be granted access to
-the Eventhouse/database; deployment and publishing can succeed even if that
-authorization is missing, but invocation will fail until access is granted.
-See the [common UDF guide](../common-udf-guide.md) for deployment, publishing,
-and endpoint configuration.
+The proxy separately authenticates the UDF invocation with a token for
+`https://analysis.windows.net/powerbi/api`.
 
 ## Direct
 
-The local proxy queries the Eventhouse REST API with:
+The proxy queries the cluster through Kusto REST with a token for
+`https://api.kusto.windows.net`. Ordinary queries use `/v2/rest/query`;
+control commands beginning with `.` use `/v1/rest/query`.
 
-```kusto
-Weather | take 100
-```
+It converts rows with valid `BeginLat`/`BeginLon` values into a GeoJSON
+FeatureCollection.
 
-It acquires an Azure CLI token for the Kusto audience
-`https://api.kusto.windows.net`, posts ordinary queries to `/v2/rest/query`,
-and converts the primary result rows to GeoJSON points using `BeginLat` and
-`BeginLon`. Kusto control commands beginning with `.` use `/v1/rest/query`
-instead; the shared `kustoQuery` helper selects the endpoint automatically.
+## Setup & permissions
+
+1. In the Fabric Eventhouse, create/open KQL database `TejitEH` and create/load
+   table `Weather` with `BeginLat` and `BeginLon` columns. The displayed
+   properties also use `State`, `EventType`, and `StartTime`.
+2. From `fabric-udf`, create the UDF item and upload its definition:
+
+   ```powershell
+   python deploy_udf.py --spec kusto/spec.json --script kusto/function_app.py
+   ```
+
+   `kusto/spec.json` creates `KustoApi` and includes
+   `azure-kusto-data` as a PyPI library. To update an existing item, add
+   `--udf <udf-id>`.
+3. There is no `connectedDataSources` entry for Kusto. Do not try to create a
+   UDF managed Kusto connection; the function uses its runtime managed
+   identity.
+4. In the portal, open `KustoApi`, select **Develop > Publish**, wait for
+   publishing, switch to **Run only**, then open
+   `get_weather > ... > Properties`, confirm **Public access = On**, and copy
+   the Public URL.
+5. Put the URL and Direct-mode settings in the gitignored `.env` file:
+
+   ```text
+   KUSTO_URI=https://trd-tne4bs58upcvrph9ak.z1.kusto.fabric.microsoft.com
+   KUSTO_DB=TejitEH
+   UDF_KUSTO_ENDPOINT=<published get_weather URL>
+   ```
+
+6. Invoke `get_weather` once. The first call should fail with HTTP 403 and a
+   message like:
+
+   ```text
+   Principal 'aadapp=<clientId>;<tenantId>' is not authorized to read database 'TejitEH'
+   ```
+
+7. Copy the complete `aadapp=<clientId>;<tenantId>` principal. As a database
+   administrator, run this in the Eventhouse query editor or through
+   `<cluster>/v1/rest/mgmt`:
+
+   ```kusto
+   .add database TejitEH viewers ('aadapp=<clientId>;<tenantId>') 'Allow KustoApi UDF to read Weather'
+   ```
+
+8. Invoke the function again; it should now succeed.
+
+In this deployment, the `KustoApi` managed identity has application ID
+`ef595923-8b9c-4454-b8d4-59572992c2bb`. Still copy the complete principal from
+the 403 because the tenant ID is also required.
+
+The deployer needs write permission on the UDF item. A database administrator
+must grant the UDF identity Database Viewer on `TejitEH`. The proxy runner
+needs permission to invoke the published UDF.
+
+Allow about two minutes between publishes. See the
+[common UDF guide](../common-udf-guide.md) for the shared flow.
+
+## What the Direct method needs
+
+The identity running the proxy must:
+
+- run `az login`;
+- have Viewer permission on KQL database `TejitEH`; and
+- be able to obtain a token for `https://api.kusto.windows.net`.
+
+The Direct method uses the runner's identity, not the UDF managed identity.
