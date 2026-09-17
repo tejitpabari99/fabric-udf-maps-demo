@@ -13,7 +13,7 @@ const RESOURCES = {
   storage: "https://storage.azure.com",                 // OneLake / ADLS
   fabric: "https://api.fabric.microsoft.com",            // Fabric control plane
   powerbi: "https://analysis.windows.net/powerbi/api",   // UDF invocation + Fabric data plane + GraphQL
-  kusto: "https://kusto.fabric.microsoft.com",           // Fabric Eventhouse (RTA) query
+  kusto: "https://api.kusto.windows.net",                // Fabric Eventhouse (RTA) query
   sql: "https://database.windows.net",                   // Fabric SQL analytics endpoint (TDS)
 };
 
@@ -73,19 +73,30 @@ async function invokeUdf(endpoint, body = {}, resource = RESOURCES.powerbi) {
   return out;
 }
 
-// Run a Kusto (Fabric Eventhouse) query via the v2 REST API. Returns row objects.
+// Run a Kusto (Fabric Eventhouse) query via the REST API. Returns row objects.
+// Control commands (starting with ".") must use the v1 endpoint; queries use v2.
 async function kustoQuery(clusterUri, database, csl, resource = RESOURCES.kusto) {
   const token = await getAzToken(resource);
-  const res = await fetch(clusterUri.replace(/\/$/, "") + "/v2/rest/query", {
+  const isControl = csl.trimStart().startsWith(".");
+  const endpoint = clusterUri.replace(/\/$/, "") + (isControl ? "/v1/rest/query" : "/v2/rest/query");
+  const res = await fetch(endpoint, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({ db: database, csl }),
   });
   const text = await res.text();
   if (!res.ok) throw new Error(`Kusto query failed (${res.status}): ${text.slice(0, 500)}`);
-  const frames = JSON.parse(text);
-  const table = frames.find((f) => f.TableKind === "PrimaryResult") ||
-    frames.find((f) => f.FrameType === "DataTable" && Array.isArray(f.Rows));
+  const parsed = JSON.parse(text);
+  if (isControl) {
+    // v1 shape: { Tables: [{ Columns:[{ColumnName}], Rows:[[...]] }] }
+    const t = parsed.Tables && parsed.Tables[0];
+    if (!t) return [];
+    const cols = t.Columns.map((c) => c.ColumnName);
+    return t.Rows.map((r) => Object.fromEntries(cols.map((c, i) => [c, r[i]])));
+  }
+  // v2 shape: array of frames; find the primary result DataTable.
+  const table = parsed.find((f) => f.TableKind === "PrimaryResult") ||
+    parsed.find((f) => f.FrameType === "DataTable" && Array.isArray(f.Rows));
   if (!table) return [];
   const cols = table.Columns.map((c) => c.ColumnName);
   return table.Rows.map((r) => Object.fromEntries(cols.map((c, i) => [c, r[i]])));
