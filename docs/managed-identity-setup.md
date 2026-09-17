@@ -18,6 +18,58 @@ The proxy authenticates to Fabric with **`@azure/identity` `DefaultAzureCredenti
 The identity (SP locally, MI in Azure) needs the **same four grants** for every
 source it touches.
 
+## Concepts: SP vs managed identity vs DefaultAzureCredential
+
+They're related but distinct:
+
+- **Service principal (SP)** — an app identity **with a secret/password you create
+  and store**. Works anywhere (including a laptop), but you own the secret.
+- **Managed identity (MI)** — an app identity that **Azure creates and manages for a
+  hosted resource; no secret exists**. Azure injects and rotates the credential at
+  runtime. It **only works inside Azure** (there is no MI on a laptop). Under the
+  hood an MI is a special, auto-managed service principal.
+- **DefaultAzureCredential** — a **code object** (not an identity) that picks
+  whichever credential is available, in order: **SP env vars → managed identity →
+  `az login`**. Same code, different credential depending on where it runs.
+
+**Why no SP in Azure?** The hosted app gets a **managed identity** for free — a
+passwordless, Azure-managed identity — so there is no SP secret to create or store.
+You only need an SP **locally**, because a laptop has no managed identity to borrow
+(or you just use `az login` locally).
+
+| Where it runs | Credential used | Secret to manage? |
+|---|---|---|
+| Laptop, SP env vars set | the service principal | yes (SP secret) |
+| Laptop, no SP | your `az login` | no |
+| Azure App Service | the app's **managed identity** | **no** |
+
+### How a customer only gets *that* data, not other data
+
+Two **independent** layers:
+
+- **Layer 1 — the app's identity → Fabric.** The BFF's identity (SP/MI) is granted
+  **least privilege**: only OneLake read on the one file, only Viewer on the one
+  Kusto DB, only Execute on the one UDF. If it isn't granted something, it cannot
+  read it.
+- **Layer 2 — the customer → the BFF.** The browser talks **only to the BFF**, never
+  to Fabric, and **never receives a Fabric token**. The BFF exposes only **fixed,
+  hardcoded operations** (e.g. `GET /api/data?source=carpark`). The customer cannot
+  request arbitrary files or run arbitrary KQL because those endpoints don't exist.
+
+```
+customer (anonymous, no Fabric creds)
+      │  can only call fixed BFF endpoints
+      ▼
+   the BFF  ──(its own MI/SP token, scoped to only what it needs)──▶  the ONE file / ONE dataset
+```
+
+So the scoping comes from **both** layers: the BFF only *offers* specific
+operations, **and** its identity can only *reach* specific data. The one rule that
+keeps this safe: **never let the customer pass a raw path / SQL / KQL** — expose
+fixed operations with validated parameters only. For per-customer data separation,
+deploy separate BFFs (each identity scoped to its own data) or add authorization
+inside the BFF.
+
 ## What the identity must be granted
 
 | Access | Audience/scope | Grant |
