@@ -24,6 +24,8 @@ UDF access tokens.
 All UDFs share the deployment, publishing, invocation, and permission model in
 the [common UDF guide](docs/common-udf-guide.md).
 
+- [Port to another tenant / deploy from scratch](docs/port-and-setup-runbook.md)
+
 ## Run locally
 
 Prerequisites:

@@ -76,6 +76,92 @@ def get_car_parks(lakehouse: fn.FabricLakehouseClient) -> dict:
 Keep responses bounded. UDF service limits include a 30 MB response, a 100
 second public-endpoint timeout, and a 4 MB request.
 
+## How UDFs connect to each source type
+
+Fabric UDFs have two distinct connection models. Choose the model based on
+whether the source type is supported by Fabric managed connections. See
+[Connect to data sources from Fabric User Data Functions](https://learn.microsoft.com/en-us/fabric/data-engineering/user-data-functions/connect-to-data-sources).
+
+### Managed connections
+
+For a supported source, declare the connection with `@udf.connection` and bind
+the same alias in the UDF definition's `connectedDataSources`. Fabric brokers
+authentication and injects a typed client into the function, so the Python code
+contains no credentials.
+
+Supported managed source types include:
+
+- Lakehouse through `FabricLakehouseClient`, using `connectToFiles()` or
+  `connectToSql()`
+- Fabric SQL Database and Warehouse through `FabricSqlConnection`
+- Mirrored Database for read-only access
+- Variable Library
+- Cosmos DB and Key Vault through their supported connection types
+
+This repository uses one managed Lakehouse connection in three ways:
+
+| Source | Alias | Injected client and operation |
+|---|---|---|
+| Car parks | `carparkslh` | `FabricLakehouseClient.connectToFiles()` reads `GeoJson/Car_Parks.geojson` |
+| PMTiles | `gpstracelh` | `FabricLakehouseClient.connectToFiles()` reads `GeoJson/GpsTrace.pmtiles` |
+| Airports | `airportslh` | `FabricLakehouseClient.connectToSql()` queries `dbo.airports` |
+
+The decorator alias, function argument, function metadata, and
+`connectedDataSources` alias must match:
+
+```python
+@udf.connection(argName="lakehouse", alias="airportslh")
+@udf.function()
+def get_airports(lakehouse: fn.FabricLakehouseClient) -> list[dict]:
+    connection = lakehouse.connectToSql()
+    # Query through the Fabric-brokered connection.
+```
+
+### Non-managed sources
+
+If a source is not in the supported managed-connection list, the UDF connects
+to it manually in Python with the source's client library. Examples include
+Kusto/Eventhouse, external APIs, and Azure Blob Storage.
+
+Manual does not mean embedding a key or secret. The code authenticates as the
+UDF runtime's **own managed identity**, and that identity must be granted access
+on the target source. The Kusto and Eventstream UDFs in this repository use
+`azure-kusto-data` with `azure.identity.DefaultAzureCredential` and
+`with_azure_token_credential`:
+
+```python
+from azure.identity import DefaultAzureCredential
+from azure.kusto.data import KustoClient, KustoConnectionStringBuilder
+
+credential = DefaultAzureCredential(
+    exclude_interactive_browser_credential=True
+)
+builder = KustoConnectionStringBuilder.with_azure_token_credential(
+    CLUSTER_URI,
+    credential,
+)
+client = KustoClient(builder)
+result = client.execute(DATABASE, QUERY)
+```
+
+There is no `@udf.connection` decorator or `connectedDataSources` entry for
+these Kusto-backed functions. After publishing, invoke each UDF once and copy
+the complete principal from the expected authorization error:
+
+```text
+Principal 'aadapp=<clientId>;<tenantId>' is not authorized to read database '<database>'
+```
+
+Then, as an Eventhouse database administrator, grant that UDF identity
+**Database Viewer**:
+
+```kusto
+.add database <database> viewers ('aadapp=<clientId>;<tenantId>') 'Allow the Fabric UDF to read this database'
+```
+
+Repeat the grant independently for the Weather UDF and the Eventstream UDF,
+because each UDF has its own managed identity.
+
 ## Create and upload the UDF definition
 
 The generic deployer creates the UDF item when needed and uploads
