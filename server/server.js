@@ -5,6 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const cfg = require("./lib/config");
 const { getPmtilesTile } = require("./lib/pmtiles");
+const { getAzToken, RESOURCES } = require("./lib/fabric");
 const registry = require("./sources");
 
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
@@ -39,7 +40,25 @@ const server = http.createServer(async (req, res) => {
   const q = new URLSearchParams(req.url.split("?")[1] || "");
 
   if (url === "/api/config") {
-    return sendJson(res, 200, { mapsKey: cfg.mapsKey, sources: registry.describe() });
+    // Prefer a subscription key when one is present (LOCAL dev convenience);
+    // otherwise use Entra token auth (hosted app — no key exposed).
+    const maps = cfg.mapsKey
+      ? { authType: "key", key: cfg.mapsKey }
+      : { authType: "aad", clientId: cfg.mapsClientId };
+    return sendJson(res, 200, { maps, sources: registry.describe() });
+  }
+
+  // Mints a short-lived Azure Maps token using the server identity (managed
+  // identity in Azure). The browser never sees a durable key.
+  if (url === "/api/maps-token") {
+    try {
+      const token = await getAzToken(RESOURCES.atlas);
+      res.writeHead(200, { "Content-Type": "text/plain", "Cache-Control": "no-store" });
+      return res.end(token);
+    } catch (err) {
+      console.error("[/api/maps-token]", err.message);
+      return sendJson(res, 502, { error: err.message });
+    }
   }
 
   const pmtilesMatch = url.match(/^\/api\/pmtiles\/(\d+)\/(\d+)\/(\d+)\.mvt$/);

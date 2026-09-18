@@ -19,6 +19,7 @@ const RESOURCES = {
   powerbi: "https://analysis.windows.net/powerbi/api",   // UDF invocation + Fabric data plane + GraphQL
   kusto: "https://api.kusto.windows.net",                // Fabric Eventhouse (RTA) query
   sql: "https://database.windows.net",                   // Fabric SQL analytics endpoint (TDS)
+  atlas: "https://atlas.microsoft.com",                  // Azure Maps (Entra auth)
 };
 
 // One credential instance (reuses its in-memory token cache). Optionally pin to a

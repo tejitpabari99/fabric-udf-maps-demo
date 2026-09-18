@@ -33,13 +33,26 @@ async function getConfig() {
 }
 
 // ----- map -----
-function initMap(subscriptionKey) {
+function initMap(mapsAuth) {
+  const authOptions = mapsAuth.authType === "aad"
+    ? {
+        authType: "anonymous",
+        clientId: mapsAuth.clientId,
+        getToken: function (resolve, reject) {
+          fetch("./api/maps-token")
+            .then((r) => (r.ok ? r.text() : Promise.reject(new Error("maps-token " + r.status))))
+            .then(resolve)
+            .catch(reject);
+        },
+      }
+    : { authType: "subscriptionKey", subscriptionKey: mapsAuth.key };
+
   map = new atlas.Map("map", {
     center: [-1.08, 53.96],
     zoom: 11,
     style: "grayscale_light",
     showLogo: true,
-    authOptions: { authType: "subscriptionKey", subscriptionKey },
+    authOptions,
   });
 
   map.events.add("ready", () => {
@@ -204,8 +217,12 @@ rtInterval.addEventListener("change", syncRealtime);
       sourceSelect.appendChild(opt);
     }
     if (SOURCES[0]) buildMethods(SOURCES[0]);
-    if (!cfg.mapsKey) { setStatus("No Azure Maps key configured on the server (.env AZURE_MAPS_KEY).", true); return; }
-    initMap(cfg.mapsKey);
+    const maps = cfg.maps || {};
+    if (maps.authType === "key" && !maps.key) {
+      setStatus("No Azure Maps auth configured (set AZURE_MAPS_CLIENT_ID for Entra, or AZURE_MAPS_KEY for local).", true);
+      return;
+    }
+    initMap(maps);
   } catch (err) {
     setStatus(err.message, true);
   }

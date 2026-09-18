@@ -1,11 +1,15 @@
 "use strict";
 
-// Central configuration, loaded from .env (see .env.example). Every id/endpoint
-// the sources need lives here so source modules stay tiny.
+// Central runtime configuration. All tenant/workspace values come from the single
+// file config/constants.js; each can be overridden with an environment variable
+// (App Service app setting / .env) if you don't want to edit the file. Source
+// modules read from this object so they stay tiny. See docs/port-and-setup-runbook.md.
 
 const fs = require("fs");
 const path = require("path");
+const K = require("../../config/constants");
 
+// Optional .env loader for local overrides (secrets/keys should only ever live here).
 function loadEnv() {
   const envPath = path.join(__dirname, "..", "..", ".env");
   if (!fs.existsSync(envPath)) return;
@@ -19,44 +23,44 @@ function loadEnv() {
 }
 loadEnv();
 
+const env = (name, fallback) => (process.env[name] !== undefined && process.env[name] !== "" ? process.env[name] : fallback);
+
 const cfg = {
-  port: parseInt(process.env.PORT || "3000", 10),
-  mapsKey: process.env.AZURE_MAPS_KEY || "",
+  port: parseInt(env("PORT", "3000"), 10),
 
-  workspaceId: process.env.WORKSPACE_ID || "61077f32-d21a-4791-b383-cacbddf222f5",
-  lakehouseId: process.env.LAKEHOUSE_ID || "b97fcfa2-6e58-4898-ab81-00ed5d1396cb",
+  // Azure Maps: Entra auth via mapsClientId (no key exposed); key is a LOCAL-only fallback.
+  mapsClientId: env("AZURE_MAPS_CLIENT_ID", K.mapsClientId),
+  mapsKey: env("AZURE_MAPS_KEY", ""),
 
-  // Fabric SQL analytics endpoint for the lakehouse (airports table).
+  workspaceId: env("WORKSPACE_ID", K.workspaceId),
+  lakehouseId: env("LAKEHOUSE_ID", K.lakehouseId),
+  files: K.files,
+
   sql: {
-    server: process.env.SQL_ENDPOINT || "x6eps4xrq2xudenlfv6naeo3i4-gj7qoyi22kiupm4dzlf534rc6u.msit-datawarehouse.fabric.microsoft.com",
-    database: process.env.SQL_DATABASE || "TejitLH",
+    server: env("SQL_ENDPOINT", K.sql.server),
+    database: env("SQL_DATABASE", K.sql.database),
+    table: K.sql.table,
   },
 
-  // Fabric Eventhouse (Kusto) for tejit-kusto.
   kusto: {
-    uri: process.env.KUSTO_URI || "https://trd-tne4bs58upcvrph9ak.z1.kusto.fabric.microsoft.com",
-    db: process.env.KUSTO_DB || "TejitEH",
+    uri: env("KUSTO_URI", K.kusto.uri),
+    db: env("KUSTO_DB", K.kusto.db),
+    table: K.kusto.table,
   },
 
-  // Eventstream (Bicycle-eventstream / SampleES).
   eventstream: {
-    id: process.env.EVENTSTREAM_ID || "a08bed4d-242a-4676-be4e-a1d62ae4cd6d",
-    name: process.env.EVENTSTREAM_NAME || "SampleES",
-    // Where the stream lands and is read from (filled in by the eventstream source).
-    kustoUri: process.env.EVENTSTREAM_KUSTO_URI || process.env.KUSTO_URI || "https://trd-tne4bs58upcvrph9ak.z1.kusto.fabric.microsoft.com",
-    kustoDb: process.env.EVENTSTREAM_KUSTO_DB || process.env.KUSTO_DB || "TejitEH",
-    table: process.env.EVENTSTREAM_TABLE || "",
+    kustoUri: env("EVENTSTREAM_KUSTO_URI", K.eventstream.kustoUri),
+    kustoDb: env("EVENTSTREAM_KUSTO_DB", K.eventstream.kustoDb),
+    table: env("EVENTSTREAM_TABLE", K.eventstream.table),
   },
 
-  udfResource: process.env.UDF_RESOURCE || "https://analysis.windows.net/powerbi/api",
-
-  // Per-source published UDF invocation URLs (empty until deployed).
+  udfResource: env("UDF_RESOURCE", K.udf.resource),
   udf: {
-    carpark: process.env.UDF_CARPARK_ENDPOINT || process.env.UDF_ENDPOINT || "",
-    pmtiles: process.env.UDF_PMTILES_ENDPOINT || "",
-    airports: process.env.UDF_AIRPORTS_ENDPOINT || "",
-    kusto: process.env.UDF_KUSTO_ENDPOINT || "",
-    eventstream: process.env.UDF_EVENTSTREAM_ENDPOINT || "",
+    carpark: env("UDF_CARPARK_ENDPOINT", K.udf.carpark),
+    pmtiles: env("UDF_PMTILES_ENDPOINT", K.udf.pmtiles),
+    airports: env("UDF_AIRPORTS_ENDPOINT", K.udf.airports),
+    kusto: env("UDF_KUSTO_ENDPOINT", K.udf.kusto),
+    eventstream: env("UDF_EVENTSTREAM_ENDPOINT", K.udf.eventstream),
   },
 };
 
