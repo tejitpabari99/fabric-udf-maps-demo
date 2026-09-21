@@ -91,8 +91,8 @@ end user stays anonymous. The identity needs **Execute** on the UDF.
 - **Managed-identity invocation** is *not* explicitly documented — validate it in
   your tenant. If MI invocation is rejected, use a certificate/secret-based service
   principal for just the UDF call.
-- Note: UDF **item management** (create/publish) never supports SP/MI — that always
-  needs a signed-in user (so `fabric-udf/deploy_udf.py` keeps using `az`).
+- Note: UDF **item management** (create/publish) never supports SP/MI. UDF
+  items are created manually in the Fabric portal by a signed-in user.
 
 ## Prerequisites that need an admin / you
 
@@ -140,4 +140,4 @@ node -e "require('./server/lib/fabric').getAzToken('https://storage.azure.com').
 ```
 
 Once the SP/MI is verified for all sources, the `az`-specific fallback can be
-dropped from `getAzToken` (the deploy scripts still use `az`).
+dropped from `getAzToken`.

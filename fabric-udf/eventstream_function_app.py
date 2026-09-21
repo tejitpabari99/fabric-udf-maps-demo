@@ -7,14 +7,16 @@ from azure.kusto.data import KustoClient, KustoConnectionStringBuilder
 
 udf = fn.UserDataFunctions()
 
-# SampleES lands in the BicycleES KQL table (live London bike telemetry).
+# Edit CLUSTER_URI / DATABASE / TABLE for your Eventhouse. Kusto is NOT a Fabric
+# managed connection, so this UDF authenticates with its OWN managed identity —
+# that identity must be granted Kusto Database Viewer (see the runbook).
 CLUSTER_URI = "https://trd-tne4bs58upcvrph9ak.z1.kusto.fabric.microsoft.com"
 DATABASE = "BicycleES"
 TABLE = "BicycleES"
 
 
 def _kusto_client(cluster: str) -> KustoClient:
-    """Build a KustoClient using whatever auth the UDF runtime supports."""
+    """Build a KustoClient across azure-kusto-data versions (token-credential, then MI)."""
     try:
         from azure.identity import DefaultAzureCredential
 

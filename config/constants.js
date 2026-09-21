@@ -14,8 +14,8 @@
 
 module.exports = {
   // --- Fabric workspace + lakehouse ---
-  workspaceId: "61077f32-d21a-4791-b383-cacbddf222f5",
-  lakehouseId: "b97fcfa2-6e58-4898-ab81-00ed5d1396cb",
+  workspaceId: "7c918cd4-9e94-46d8-89dd-15d9226aaed3",
+  lakehouseId: "51546df7-31e4-4f61-91be-070377130ebe",
 
   // Lakehouse file paths (relative to the lakehouse) used by the file sources.
   files: {
@@ -25,7 +25,7 @@ module.exports = {
 
   // --- Lakehouse SQL analytics endpoint (airports table) ---
   sql: {
-    server: "x6eps4xrq2xudenlfv6naeo3i4-gj7qoyi22kiupm4dzlf534rc6u.msit-datawarehouse.fabric.microsoft.com",
+    server: "pbziljroiu2ehb7n65aulfkxku-2sgjc7eut3menco5cxmse2vo2m.msit-datawarehouse.fabric.microsoft.com",
     database: "TejitLH",
     table: "dbo.airports",
   },
@@ -35,22 +35,22 @@ module.exports = {
 
   // --- Eventstream landing table (bikes source, real-time) ---
   eventstream: {
-    kustoUri: "https://trd-tne4bs58upcvrph9ak.z1.kusto.fabric.microsoft.com",
-    kustoDb: "BicycleES",
+    kustoUri: "https://trd-6hz9ctdyycuvn8vsds.z9.kusto.fabric.microsoft.com",
+    kustoDb: "TejitEH",
     table: "BicycleES",
   },
 
   // --- Azure Maps account CLIENT (unique) id for Entra auth (no key exposed).
   //     Leave empty to fall back to a subscription key for LOCAL dev only.
-  mapsClientId: "e3c7516b-b6be-4ef3-be4b-1820312b2b13",
+  mapsClientId: "4283ee1e-1f15-4ad3-858c-75b4bd8065df",
 
   // --- Published Fabric User Data Function invocation URLs ---
   //     Fill each in AFTER you publish the UDF and copy its Public URL.
   udf: {
     resource: "https://analysis.windows.net/powerbi/api",
-    carpark: "https://61077f32d21a4791b383cacbddf222f5.z61.msituserdatafunctions.fabric.microsoft.com/v1/workspaces/61077f32-d21a-4791-b383-cacbddf222f5/userDataFunctions/695fb9b2-483c-4921-8569-fbc2b18ae128/functions/get_car_parks/invoke",
-    pmtiles: "https://61077f32d21a4791b383cacbddf222f5.z61.msituserdatafunctions.fabric.microsoft.com/v1/workspaces/61077f32-d21a-4791-b383-cacbddf222f5/userDataFunctions/f7bc2a9e-79cb-4b8b-8556-e48e70d4f572/functions/get_gpstrace_pmtiles/invoke",
-    airports: "https://61077f32d21a4791b383cacbddf222f5.z61.msituserdatafunctions.fabric.microsoft.com/v1/workspaces/61077f32-d21a-4791-b383-cacbddf222f5/userDataFunctions/1fc5eb6d-f4d5-46b8-b650-2758fc856421/functions/get_airports/invoke",
-    eventstream: "https://61077f32d21a4791b383cacbddf222f5.z61.msituserdatafunctions.fabric.microsoft.com/v1/workspaces/61077f32-d21a-4791-b383-cacbddf222f5/userDataFunctions/18f66db4-b5d9-4455-8f24-fa9f1b36d033/functions/get_bikes/invoke",
+    carpark: "https://7c918cd49e9446d889dd15d9226aaed3.z7c.msituserdatafunctions.fabric.microsoft.com/v1/workspaces/7c918cd4-9e94-46d8-89dd-15d9226aaed3/userDataFunctions/49a8ed67-6893-420b-ae2c-96b6d621b173/functions/get_car_parks/invoke",
+    pmtiles: "https://7c918cd49e9446d889dd15d9226aaed3.z7c.msituserdatafunctions.fabric.microsoft.com/v1/workspaces/7c918cd4-9e94-46d8-89dd-15d9226aaed3/userDataFunctions/a6a43524-3e9b-447b-a62a-fc2da509ba15/functions/get_gpstrace_pmtiles/invoke",
+    airports: "https://7c918cd49e9446d889dd15d9226aaed3.z7c.msituserdatafunctions.fabric.microsoft.com/v1/workspaces/7c918cd4-9e94-46d8-89dd-15d9226aaed3/userDataFunctions/db48bcdb-f69a-45c6-8cde-30874eec46db/functions/get_airports/invoke",
+    eventstream: "https://7c918cd49e9446d889dd15d9226aaed3.z7c.msituserdatafunctions.fabric.microsoft.com/v1/workspaces/7c918cd4-9e94-46d8-89dd-15d9226aaed3/userDataFunctions/64d326e2-8d53-4878-b778-0e393fed7cb4/functions/get_bikes/invoke",
   },
 };

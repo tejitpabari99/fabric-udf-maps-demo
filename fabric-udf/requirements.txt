@@ -1,4 +1,0 @@
-# The Fabric User Data Functions runtime provides fabric-functions.
-# Add extra packages here if your function imports them (the portal library
-# management installs from this file). The stdlib `json` used here needs nothing.
-fabric-functions

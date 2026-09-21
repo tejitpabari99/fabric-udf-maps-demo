@@ -199,10 +199,10 @@ These steps use no Azure CLI.
 
 | Source | Code to copy | Function to publish | Data access |
 |---|---|---|---|
-| Car parks | `fabric-udf/function_app.py` | `get_car_parks` | Managed Lakehouse connection, alias `carparkslh` |
-| PMTiles | `fabric-udf/pmtiles/function_app.py` | `get_gpstrace_pmtiles` | Managed Lakehouse connection, alias `gpstracelh` |
-| Airports | `fabric-udf/airports/function_app.py` | `get_airports` | Managed Lakehouse connection, alias `airportslh` |
-| Eventstream | `fabric-udf/eventstream/function_app.py` | `get_bikes` | Kusto SDK using the UDF runtime's own managed identity |
+| Car parks | `fabric-udf/carpark_function_app.py` | `get_car_parks` | Managed Lakehouse connection, alias `carparkslh` |
+| PMTiles | `fabric-udf/pmtiles_function_app.py` | `get_gpstrace_pmtiles` | Managed Lakehouse connection, alias `gpstracelh` |
+| Airports | `fabric-udf/airports_function_app.py` | `get_airports` | Managed Lakehouse connection, alias `airportslh` |
+| Eventstream | `fabric-udf/eventstream_function_app.py` | `get_bikes` | Kusto SDK using the UDF runtime's own managed identity |
 
 Repeat the following for each source:
 
@@ -217,7 +217,7 @@ Repeat the following for each source:
       alphanumeric; do not use `_` or `-`.
 4. For Eventstream:
    1. Before copying the code, update `CLUSTER_URI`, `DATABASE`, and `TABLE` in
-      `fabric-udf/eventstream/function_app.py` to the destination created in
+      `fabric-udf/eventstream_function_app.py` to the destination created in
       section 3.
    2. In the UDF environment/library management experience, add the public
       PyPI package `azure-kusto-data` version `6.0.4`.
@@ -243,14 +243,12 @@ Record all four URLs:
 <eventstreamUdfUrl>
 ```
 
+Put them in `config/constants.js` as `udf.carpark`, `udf.pmtiles`,
+`udf.airports`, and `udf.eventstream`.
+
 **Public access does not mean anonymous access.** The URL is internet-reachable,
 but every invocation still requires a Microsoft Entra token for
 `https://analysis.windows.net/powerbi/api`.
-
-> **Optional CLI alternative:** the scripts under `fabric-udf/` can upload UDF
-> definitions, but they require an Azure CLI user sign-in. They are not needed
-> for this portal-only flow, and publishing plus Public URL configuration still
-> happen in the Fabric portal.
 
 ## 5. Grant the UDF identities
 
@@ -720,15 +718,8 @@ are not needed for a normal Web App redeployment.
 
 | File | What to edit | Value source |
 |---|---|---|
-| `fabric-udf/eventstream/function_app.py` | `CLUSTER_URI`, `DATABASE`, and `TABLE` | Eventhouse query URI and the Eventstream destination database/table |
-| `fabric-udf/*/spec.json` for Lakehouse-backed UDF definitions | `connectedDataSources[].artifactId` and `connectedDataSources[].workspaceId`; preserve the matching alphanumeric alias | Target Lakehouse ID and workspace ID from Fabric item Properties |
-
-The checked-in PMTiles and Airports UDFs have `spec.json` files. The Car parks
-UDF currently uses `fabric-udf/function_app.py` and is bound to the same target
-workspace/Lakehouse through **Manage connections** in the portal; if it is
-represented by a spec, use the same `artifactId`, `workspaceId`, and
-alphanumeric alias rules.
+| `fabric-udf/eventstream_function_app.py` | `CLUSTER_URI`, `DATABASE`, and `TABLE` | Eventhouse query URI and the Eventstream destination database/table |
 
 For all three Lakehouse-backed UDFs--Car parks, PMTiles, and Airports--the
-connection alias in the Python decorator, the function metadata, and any
-`connectedDataSources` definition must match exactly.
+connection alias configured through **Manage connections** must match the
+Python decorator exactly.

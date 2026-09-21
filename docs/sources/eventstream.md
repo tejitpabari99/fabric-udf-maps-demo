@@ -7,7 +7,7 @@ table `BicycleES` in KQL database `BicycleES`.
 Rows include `Latitude`, `Longitude`, `No_Bikes`, `No_Empty_Docks`, `Street`,
 `Neighbourhood`, and `BikepointID`.
 
-![Live bicycle events rendered on Azure Maps](eventstream.png)
+![Live bicycle events rendered on Azure Maps](../images/eventstream.png)
 
 ## Create the Eventstream destination
 
@@ -66,33 +66,37 @@ off, the browser does not re-fetch automatically.
 
 1. Create the Eventstream destination as described above and verify that
    `BicycleES` is receiving rows.
-2. From `fabric-udf`, create the UDF item and upload its definition:
-
-   ```powershell
-   python deploy_udf.py --spec eventstream/spec.json --script eventstream/function_app.py
-   ```
-
-   `eventstream/spec.json` creates `EventstreamApi` and includes
-   `azure-kusto-data` as a PyPI library. To update an existing item, add
-   `--udf <udf-id>`.
-3. There is no managed Kusto connection or `connectedDataSources` binding for
-   this UDF. It uses the UDF runtime managed identity.
-4. In the portal, open `EventstreamApi`, select **Develop > Publish**, wait for
+2. Edit `CLUSTER_URI`, `DATABASE`, and `TABLE` at the top of
+   `fabric-udf/eventstream_function_app.py` to match the Eventhouse
+   destination.
+3. In the Fabric portal, create a **User Data Functions** item, open it in
+   **Develop** mode, and paste
+   `fabric-udf/eventstream_function_app.py`. Add the public PyPI package
+   `azure-kusto-data` version `6.0.4` in the UDF environment/library
+   management experience.
+4. There is no managed Kusto connection for this UDF. It uses the UDF runtime
+   managed identity.
+5. Select **Publish**, wait for
    publishing, switch to **Run only**, then open
-   `get_bikes > ... > Properties`, confirm **Public access = On**, and copy the
+   `get_bikes > ... > Properties`, set **Public access = On**, and copy the
    Public URL.
-5. Set the landing destination and endpoint in the gitignored `.env` file:
+6. Set the Direct-mode landing destination and UDF endpoint in
+   `config/constants.js`:
 
-   ```text
-   EVENTSTREAM_KUSTO_URI=https://trd-tne4bs58upcvrph9ak.z1.kusto.fabric.microsoft.com
-   EVENTSTREAM_KUSTO_DB=BicycleES
-   EVENTSTREAM_TABLE=BicycleES
-   UDF_EVENTSTREAM_ENDPOINT=<published get_bikes URL>
+   ```javascript
+   eventstream: {
+     kustoUri: "https://trd-tne4bs58upcvrph9ak.z1.kusto.fabric.microsoft.com",
+     kustoDb: "BicycleES",
+     table: "BicycleES"
+   },
+   udf: {
+     eventstream: "<published get_bikes URL>"
+   }
    ```
 
-6. Invoke `get_bikes` once. The first call should fail with HTTP 403 and expose
+7. Invoke `get_bikes` once. The first call should fail with HTTP 403 and expose
    a principal such as `aadapp=<clientId>;<tenantId>`.
-7. Copy the complete principal. As a database administrator, run:
+8. Copy the complete principal. As a database administrator, run:
 
    ```kusto
    .add database BicycleES viewers ('aadapp=<clientId>;<tenantId>') 'Allow EventstreamApi UDF to read live bicycle data'
@@ -100,18 +104,18 @@ off, the browser does not re-fetch automatically.
 
    Run the command in the Eventhouse query editor or submit it to
    `<cluster>/v1/rest/mgmt`.
-8. Invoke the function again; it should now return bicycle rows.
+9. Invoke the function again; it should now return bicycle rows.
 
 In this deployment, the `EventstreamApi` managed identity has application ID
 `8ce609ad-383b-4471-9b36-0d42ec532c00`. Copy the complete principal from the
 403 so the tenant ID is included.
 
-The deployer needs write permission on the UDF item. A database administrator
+The signed-in UDF creator needs write permission on the UDF item. A database administrator
 must grant the UDF identity Database Viewer on database `BicycleES`. The proxy
 runner needs permission to invoke the published UDF.
 
 Allow about two minutes between publishes. See the
-[common UDF guide](../common-udf-guide.md) for the shared deployment and
+[common UDF guide](../common-udf-guide.md) for the shared creation and
 managed-identity permission model.
 
 ## What the Direct method needs

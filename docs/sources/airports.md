@@ -7,7 +7,7 @@ The physical columns are `_c0` through `_c13`. Latitude is `_c6`, longitude is
 `_c7`, and the first table row contains text headers. The proxy's numeric
 coordinate validation skips that header row automatically.
 
-![Airport rows rendered on Azure Maps](airports.png)
+![Airport rows rendered on Azure Maps](../images/airports.png)
 
 ## Function
 
@@ -48,35 +48,33 @@ conversion.
    remain as the first row because nonnumeric coordinates are filtered.
 3. Confirm that the Lakehouse SQL analytics endpoint exposes
    `dbo.airports`.
-4. From `fabric-udf`, create the UDF item and upload its definition:
-
-   ```powershell
-   python deploy_udf.py --spec airports/spec.json --script airports/function_app.py
-   ```
-
-   To update an existing item, add `--udf <udf-id>`.
-5. The spec creates `AirportsApi` and binds alias `airportslh` to `TejitLH`
-   through `connectedDataSources`. The connection is auto-wired; no manual
-   **Manage connections** step is required.
-6. The deployer needs permission to create/update the UDF item, bind the
-   Lakehouse, and read/test the Lakehouse SQL endpoint. The bound
-   `FabricLakehouseClient` supplies the UDF's SQL connection.
-7. In the portal, open `AirportsApi`, select **Develop > Publish**, wait for
+4. In the Fabric portal, create a **User Data Functions** item, open it in
+   **Develop** mode, and paste
+   `fabric-udf/airports_function_app.py`.
+5. Open **Manage connections**, add Lakehouse `TejitLH`, and set the
+   connection alias to `airportslh`. The alias is alphanumeric and must match
+   the code. This function uses `connectToSql()`.
+6. Select **Publish**, wait for
    publishing, switch to **Run only**, then open
-   `get_airports > ... > Properties`, confirm **Public access = On**, and copy
+   `get_airports > ... > Properties`, set **Public access = On**, and copy
    the Public URL.
-8. Put the URL and SQL endpoint settings in the gitignored `.env` file:
+7. Put the Public URL and Direct-mode SQL endpoint settings in
+   `config/constants.js`:
 
-   ```text
-   SQL_ENDPOINT=x6eps4xrq2xudenlfv6naeo3i4-gj7qoyi22kiupm4dzlf534rc6u.msit-datawarehouse.fabric.microsoft.com
-   SQL_DATABASE=TejitLH
-   UDF_AIRPORTS_ENDPOINT=<published get_airports URL>
+   ```javascript
+   sql: {
+     server: "x6eps4xrq2xudenlfv6naeo3i4-gj7qoyi22kiupm4dzlf534rc6u.msit-datawarehouse.fabric.microsoft.com",
+     database: "TejitLH"
+   },
+   udf: {
+     airports: "<published get_airports URL>"
+   }
    ```
 
 Allow about two minutes between publishes. The published URL always requires a
 Microsoft Entra invocation token.
 
-See the [common UDF guide](../common-udf-guide.md) for shared UDF deployment
+See the [common UDF guide](../common-udf-guide.md) for shared UDF creation
 and permission details.
 
 ## What the Direct method needs

@@ -9,7 +9,7 @@ acquires Microsoft Entra tokens, calls Fabric data sources, and returns only the
 data the map needs. The browser never receives Fabric, OneLake, SQL, Kusto, or
 UDF access tokens.
 
-![Car parks rendered on Azure Maps](docs/screenshot-udf.png)
+![Car parks rendered on Azure Maps](docs/images/carpark.png)
 
 ## Sources and methods
 
@@ -20,7 +20,7 @@ UDF access tokens.
 | `dbo.airports` | `AirportsApi.get_airports` queries the Lakehouse SQL connection | Lakehouse SQL analytics endpoint through `mssql` | [Airports](docs/sources/airports.md) |
 | `BicycleES` | `EventstreamApi.get_bikes` queries the Eventstream landing table (Kusto) with the UDF managed identity | Kusto REST, with optional timed refresh | [Eventstream bikes](docs/sources/eventstream.md) |
 
-All UDFs share the deployment, publishing, invocation, and permission model in
+All UDFs share the creation, publishing, invocation, and permission model in
 the [common UDF guide](docs/common-udf-guide.md).
 
 - [Port to another tenant / deploy from scratch](docs/port-and-setup-runbook.md)
@@ -37,7 +37,7 @@ Prerequisites:
 ```powershell
 az login
 Copy-Item .env.example .env
-# Edit .env and set AZURE_MAPS_KEY plus any source-specific endpoints.
+# Edit .env and set AZURE_MAPS_KEY.
 npm install
 npm start
 ```
@@ -67,7 +67,6 @@ each Direct source and each UDF they invoke.
 | Fabric SQL endpoint (TDS) | `https://database.windows.net` | Proxy runner needs read access on the Lakehouse SQL analytics endpoint |
 | Kusto / Eventhouse | `https://api.kusto.windows.net` | Proxy runner needs Viewer on the target Eventhouse database |
 | Published UDF invocation | `https://analysis.windows.net/powerbi/api` | Proxy runner needs permission to invoke the UDF |
-| UDF deployment through Fabric REST | `https://api.fabric.microsoft.com` | Deployer needs permission to create/update UDF items and bind the configured data source |
 
 `AZURE_MAPS_KEY` is the only browser-facing credential in this local demo. It is
 stored only in `.env`, which is gitignored, and the proxy serves it through
@@ -75,22 +74,29 @@ stored only in `.env`, which is gitignored, and the proxy serves it through
 authentication or SAS authentication for Azure Maps instead of a subscription
 key.
 
-UDF invocation URLs also live in `.env` as `UDF_<SOURCE>_ENDPOINT`. They are not
-anonymous URLs: published UDF endpoints are internet-reachable but always
-require a Microsoft Entra token for the UDF audience above.
+UDF invocation URLs live in `config/constants.js` under `udf.<source>`. They
+are not anonymous URLs: published UDF endpoints are internet-reachable but
+always require a Microsoft Entra token for the UDF audience above.
 
-## Deploying a UDF
+## Creating and publishing a UDF
 
-The scripts under `fabric-udf/` create the UDF item and upload its definition
-through Fabric REST. For Lakehouse-backed functions, the definition also wires
-the Lakehouse connection through `connectedDataSources`; no manual **Manage
-connections** step is required.
+Create a **User Data Functions** item in the Fabric portal, open it in
+**Develop** mode, and paste the matching
+`fabric-udf/<scenario>_function_app.py` file. For Car parks, PMTiles, and
+Airports, use **Manage connections** to add the Lakehouse and set the alias to
+the alphanumeric value used in the code: `carparkslh`, `gpstracelh`, or
+`airportslh`. Car parks and PMTiles use `connectToFiles()`; Airports uses
+`connectToSql()`.
 
-Publishing is still manual: open the item in the Fabric portal, choose
-**Develop > Publish**, wait for publishing to complete, switch to **Run only**,
-open the function's **... > Properties**, confirm **Public access = On**, and
-copy its Public URL into the matching `.env` variable. Allow about two minutes
-between publishes.
+For Eventstream, edit `CLUSTER_URI`, `DATABASE`, and `TABLE` at the top of
+`fabric-udf/eventstream_function_app.py` before pasting it. This function has
+no managed connection; after publishing, grant its runtime managed identity
+Kusto **Database Viewer** as described in the source guide.
+
+Choose **Publish**, wait for publishing to complete, switch to **Run only**,
+open the function's **... > Properties**, set **Public access = On**, and copy
+its Public URL into the matching `config/constants.js` `udf.<source>` value.
+Allow about two minutes between publishes.
 
 See the [common UDF guide](docs/common-udf-guide.md) and the relevant source
-guide for exact commands and permissions.
+guide for exact portal steps and permissions.

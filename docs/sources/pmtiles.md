@@ -4,7 +4,7 @@ This source renders the Lakehouse file
 `Files/GeoJson/GpsTrace.pmtiles`, a roughly 360 KB PMTiles vector archive. Its
 vector source layer is `GpsTrace` and its supported zoom range is 5 through 15.
 
-![GPS trace PMTiles rendered on Azure Maps](pmtiles.png)
+![GPS trace PMTiles rendered on Azure Maps](../images/pmtiles.png)
 
 ## Function
 
@@ -49,27 +49,21 @@ symbol layers reference the `GpsTrace` source layer.
 2. Upload `GpsTrace.pmtiles` to
    `Files/GeoJson/GpsTrace.pmtiles`. The archive must contain MVT vector tiles
    and declare the `GpsTrace` source layer.
-3. From `fabric-udf`, create the UDF item and upload its definition:
-
-   ```powershell
-   python deploy_udf.py --spec pmtiles/spec.json --script pmtiles/function_app.py
-   ```
-
-   To update an existing item, add `--udf <udf-id>`.
-4. The spec creates `GpsTracePmtilesApi` and binds alias `gpstracelh` to the
-   Lakehouse through `connectedDataSources`. This automatically wires the
-   `FabricLakehouseClient`; no manual **Manage connections** step is required.
-5. The deployer needs permission to create/update the UDF item and bind the
-   Lakehouse. The binding grants the UDF connection access to the Lakehouse
-   file.
-6. In the portal, open `GpsTracePmtilesApi`, select
-   **Develop > Publish**, wait for publishing, switch to **Run only**, then
-   open `get_gpstrace_pmtiles > ... > Properties`, confirm
+3. In the Fabric portal, create a **User Data Functions** item, open it in
+   **Develop** mode, and paste
+   `fabric-udf/pmtiles_function_app.py`.
+4. Open **Manage connections**, add Lakehouse `TejitLH`, and set the
+   connection alias to `gpstracelh`. The alias is alphanumeric and must match
+   the code. This function uses `connectToFiles()`.
+5. Select **Publish**, wait for publishing, switch to **Run only**, then
+   open `get_gpstrace_pmtiles > ... > Properties`, set
    **Public access = On**, and copy the Public URL.
-7. Put the URL in the gitignored `.env` file:
+6. Put the URL in `config/constants.js`:
 
-   ```text
-   UDF_PMTILES_ENDPOINT=<published get_gpstrace_pmtiles URL>
+   ```javascript
+   udf: {
+     pmtiles: "<published get_gpstrace_pmtiles URL>"
+   }
    ```
 
 Allow about two minutes between publishes. The UDF URL is not anonymous and
