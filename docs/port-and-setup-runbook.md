@@ -1,217 +1,240 @@
 # Port and setup runbook
 
+This runbook recreates the Fabric-to-Azure-Maps demo in another tenant or
+workspace without requiring the Azure CLI. Azure work is performed in the
+Azure portal, Fabric work in the Fabric portal, and deployment through VS Code,
+Deployment Center, or Kudu.
+
 ## 1. Overview & architecture
 
-This runbook recreates the complete demo in another Microsoft Fabric tenant or
-workspace and deploys the web application to Azure App Service.
-
-The application is a Node.js Backend-for-Frontend (BFF) plus a static browser
-frontend:
+The solution has a static browser frontend and a Node.js
+Backend-for-Frontend (BFF) hosted by Azure App Service:
 
 ```text
-browser -> Azure App Service (static frontend + Node BFF)
-        -> OneLake / Lakehouse SQL / Eventhouse / published Fabric UDFs
-        -> Azure Maps
+browser
+  |-- Azure Maps Web SDK
+  |-- pmtiles.js + atlas.addProtocol("pmtiles", ...)
+  |
+  v
+Azure App Service (Node BFF, system-assigned managed identity)
+  |-- OneLake files
+  |-- Lakehouse SQL analytics endpoint
+  |-- Eventhouse/Kusto
+  `-- published Fabric User Data Functions
 ```
 
-The browser calls fixed BFF routes and never receives Fabric, OneLake, SQL,
-Kusto, or UDF credentials. The BFF uses
-`@azure/identity` `DefaultAzureCredential`:
+The browser calls fixed application routes. It never receives a Fabric,
+OneLake, SQL, Kusto, or UDF access token. In Azure, the BFF uses
+`DefaultAzureCredential` to authenticate as the Web App's system-assigned
+managed identity.
 
-- In Azure, it authenticates as the App Service system-assigned managed
-  identity.
-- Locally, after `az login`, it authenticates as the signed-in developer.
-
-The demo exposes four sources through two methods each:
+The app has exactly four sources, each available through **Function** and
+**Direct** methods:
 
 | Source | Function method | Direct method |
 |---|---|---|
-| `carpark` | UDF reads a Lakehouse GeoJSON file | BFF reads the file through OneLake DFS |
-| `pmtiles` | UDF reads and returns a Lakehouse PMTiles archive | BFF reads the archive through OneLake DFS |
-| `airports` | UDF queries the Lakehouse SQL analytics endpoint | BFF connects to the SQL analytics endpoint |
-| `eventstream` | UDF queries the Eventstream destination with the UDF identity | BFF queries Kusto REST with the app identity |
+| `carpark` | A UDF reads `Car_Parks.geojson` through a managed Lakehouse connection | The BFF reads the file from OneLake |
+| `pmtiles` | A UDF returns the complete `GpsTrace.pmtiles` archive as base64 | The BFF reads the complete archive from OneLake |
+| `airports` | A UDF queries `dbo.airports` through a managed Lakehouse connection | The BFF queries the Lakehouse SQL analytics endpoint |
+| `eventstream` | A UDF queries the Eventstream destination table in Kusto using the UDF's own identity | The BFF queries Kusto REST using the Web App identity |
 
-All tenant-, workspace-, data-, Maps-, and UDF-specific values used by the app
-are centralized in [`config/constants.js`](../config/constants.js). It is the
-single application file to update when porting the deployment. Its values are
-non-secret identifiers and endpoints. Azure Maps uses Microsoft Entra token
-authentication; do not put a Maps subscription key in the application or
-deployment settings.
+### PMTiles request flow
 
-The current reference deployment is:
+The server does **not** extract or serve individual MVT tiles. For either
+method, it obtains the complete PMTiles archive and exposes it through:
 
-| Resource | Example value |
+```text
+GET /api/pmtiles-archive?method=function
+GET /api/pmtiles-archive?method=direct
+```
+
+The endpoint supports HTTP Range requests and normally returns `206 Partial
+Content` for the byte ranges requested by the browser. In the browser,
+`pmtiles.js` is registered with Azure Maps through
+`atlas.addProtocol("pmtiles", protocol.tile)`. Azure Maps uses a
+`pmtiles://` URL, and `pmtiles.js` range-reads and decodes the vector tiles
+client-side.
+
+A fully backend-free PMTiles alternative is to copy the `.pmtiles` archive to
+a publicly readable blob or static host that supports byte ranges and CORS,
+then point the browser's `pmtiles://` URL directly at that HTTPS URL. That
+alternative bypasses both the BFF and the UDF for PMTiles, but makes the archive
+public.
+
+All app-specific identifiers and endpoints are centralized in
+[`config/constants.js`](../config/constants.js). It is the only application
+file that must change when moving the already-created Fabric resources to a
+new tenant.
+
+Reference deployment values, included only as examples:
+
+| Resource | Example |
 |---|---|
 | Azure subscription | `d9eef650-a87c-433b-a236-0eaf3140d921` |
 | Resource group | `maps-tejitpabari` |
-| App Service | `fabric-maps-tejitpabari` |
+| Web App | `fabric-maps-tejitpabari` |
 | Azure Maps account | `maps-tejit` |
-| Azure Maps client/unique ID | `e3c7516b-b6be-4ef3-be4b-1820312b2b13` |
+| Azure Maps account client ID | `e3c7516b-b6be-4ef3-be4b-1820312b2b13` |
+| Web App managed identity object ID | `4d0ee87a-990f-4ee6-abd0-f3af3701bb12` |
+| Web App managed identity application/client ID | `2ab31ef8-a98c-4d65-aee3-000f7a90ae4b` |
 
-These are examples only. Substitute resources in the target tenant and
-subscription.
+Do not copy these identities into another deployment. Use the values created
+in the target tenant.
 
 ## 2. Prerequisites
 
-Before starting, obtain:
+You need:
 
-- A Fabric workspace in the target tenant.
-- Fabric workspace **Admin** permission.
-- Eventhouse database **Admin** permission for the bicycle KQL database.
+- A target Fabric workspace and permission to create Lakehouse, Eventstream,
+  Eventhouse/KQL database, and User Data Functions items.
+- **Admin** access to the target Fabric workspace.
+- **Database Admin** access to the Eventhouse/KQL database, so you can grant
+  Database Viewer.
 - An Azure subscription and resource group.
-- Permission to create Azure resources and assign Azure RBAC roles. Assigning
-  roles normally requires **Owner** or **User Access Administrator** at the
-  applicable scope.
-- Azure CLI and Node.js 22 LTS installed locally.
-- A signed-in Azure CLI session:
+- Permission to create an App Service plan and Web App.
+- Permission to assign Azure RBAC roles, normally **Owner** or **User Access
+  Administrator** at the applicable scope.
+- An Azure Maps account. In the Azure portal, open the account's
+  **Authentication** page and record its **Client ID** (also called the unique
+  account ID).
+- Node.js 20 or 22 LTS on the deployment workstation.
+- Visual Studio Code with the **Azure App Service** extension if you choose the
+  VS Code deployment option.
 
-  ```powershell
-  az login
-  az account set --subscription <subscriptionId>
-  ```
-
-A Fabric administrator must enable both of these tenant settings in
-**Fabric Admin portal -> Tenant settings**:
-
-1. **Developer settings -> Service principals can use Fabric APIs**
-2. **OneLake settings -> Users can access data stored in OneLake with apps
-   external to Fabric**
-
-If either setting is scoped to security groups, ensure the App Service managed
-identity's service principal is included in an allowed group. The first setting
-is required for the app identity to invoke published UDFs. The second is
-required for direct OneLake access from Azure App Service.
+No Azure CLI installation or sign-in is required by this runbook.
 
 ## 3. Port the data
 
-Create the destination Fabric items and copy or recreate all four data sources.
-Record every value called out below; those values are used in later steps.
+Create or select the target Fabric items, copy the four sources, and record the
+identifiers and endpoints called out below.
 
 ### Find Fabric IDs and endpoints
 
-In the Fabric portal, open the workspace or item and use **Settings** or
-**Properties** to copy its ID. The browser URL also contains the workspace and
-item IDs. For a Lakehouse, open its SQL analytics endpoint and copy the
-**SQL connection string** and **database name** from the endpoint properties.
-For an Eventhouse/KQL database, copy the **Query URI** from its details or
-connection information.
+- **Workspace ID:** open the workspace and copy the ID from the browser URL or
+  workspace properties.
+- **Lakehouse ID:** open the Lakehouse and copy its item ID from the browser URL
+  or item properties.
+- **SQL server and database:** open the Lakehouse's SQL analytics endpoint and
+  copy its SQL connection string/server and database name.
+- **Kusto query URI:** open the Eventhouse/KQL database and copy its **Query
+  URI** from the item details or connection information.
 
-OneLake DFS paths follow this convention:
+OneLake file URLs follow this shape:
 
 ```text
 https://onelake.dfs.fabric.microsoft.com/<workspaceId>/<lakehouseId>/Files/<path>
 ```
 
-The UDF Lakehouse client treats paths as relative to `Files`, so
-`Files/GeoJson/Car_Parks.geojson` in OneLake is
-`GeoJson/Car_Parks.geojson` in `connectToFiles()`.
+The app configuration uses paths beginning with `Files/`. A UDF
+`FabricLakehouseClient.connectToFiles()` path is relative to the `Files` root
+and therefore omits that prefix.
 
-### Car parks
+### 3.1 Car parks
 
-1. Create or select a Lakehouse in the new workspace.
-2. Create the `Files/GeoJson` folder if it does not exist.
-3. Upload `Car_Parks.geojson` to:
+1. In the Fabric portal, create or select a Lakehouse.
+2. Under **Files**, create the folder `GeoJson` if it does not exist.
+3. Upload `Car_Parks.geojson` as:
 
    ```text
    Files/GeoJson/Car_Parks.geojson
    ```
 
-4. Record:
-   - `<workspaceId>`
-   - `<lakehouseId>`
+4. Record the workspace ID and Lakehouse ID.
 
-### PMTiles
+### 3.2 PMTiles
 
-Upload `GpsTrace.pmtiles` to the same Lakehouse:
+1. Upload `GpsTrace.pmtiles` to the same Lakehouse:
 
-```text
-Files/GeoJson/GpsTrace.pmtiles
-```
+   ```text
+   Files/GeoJson/GpsTrace.pmtiles
+   ```
 
-The archive must contain MVT vector tiles and declare the `GpsTrace` source
-layer.
+2. Confirm that the archive contains MVT vector tiles and declares a vector
+   source layer. The current sample archive declares `GpsTrace`.
 
-### Airports
+The Function method returns the full archive as base64; the Direct method reads
+the full archive from OneLake. Both methods then expose the archive through the
+same HTTP Range endpoint described in section 1.
 
-1. In the Lakehouse, create or load table `dbo.airports`, for example by
-   importing the airports CSV/data.
-2. Preserve the shape expected by this demo: latitude in `_c6` and longitude
-   in `_c7`.
-3. Open the Lakehouse SQL analytics endpoint and confirm this succeeds:
+### 3.3 Airports
+
+1. Create or load the Lakehouse table `dbo.airports` using the Fabric portal,
+   a Fabric data pipeline, or a Fabric notebook.
+2. Preserve the schema expected by the sample: latitude is in `_c6` and
+   longitude is in `_c7`.
+3. In the Lakehouse SQL analytics endpoint, open a query and confirm:
 
    ```sql
    SELECT TOP 100 * FROM dbo.airports;
    ```
 
 4. Record:
-   - `<sqlServer>`: the server from the SQL analytics endpoint connection
-     string, ending in `.msit-datawarehouse.fabric.microsoft.com`
-   - `<sqlDatabase>`: the Lakehouse SQL endpoint database name
+   - The SQL server name ending in
+     `.msit-datawarehouse.fabric.microsoft.com`.
+   - The SQL endpoint database name.
+   - The table name, normally `dbo.airports`.
 
-### Eventstream bicycles
+### 3.4 Eventstream bicycles
 
-1. Create an Eventstream.
-2. Add the built-in sample source **sample-bicycles**.
+1. In the Fabric portal, create an Eventstream.
+2. Add the built-in **sample-bicycles** source.
 3. Add a **KQL database** destination.
-4. Select or create a destination KQL database and table, for example
-   database `BicycleES` and table `BicycleES`.
+4. Select or create a destination database and table, for example database
+   `BicycleES` and table `BicycleES`.
 5. Map the incoming fields, including `Latitude` and `Longitude`.
-6. Publish/start the Eventstream.
-7. Confirm rows are arriving and that the count continues to grow:
+6. Publish and start the Eventstream.
+7. Open the destination KQL database or queryset and confirm that rows arrive:
 
    ```kusto
    table("<bikesTable>")
    | count
    ```
 
-8. Record:
-   - `<bikesQueryUri>`: the destination cluster query URI
-   - `<bikesDatabase>`
-   - `<bikesTable>`
+8. Record the Eventhouse query URI, database name, and table name.
 
 ## 4. Create & publish the 4 UDFs
 
-Create one Fabric User Data Functions item per source. Every UDF is published
-as a Microsoft Entra-authenticated public endpoint; **Public access** makes the
-endpoint internet-reachable, not anonymous.
+Create one User Data Functions item for each source in the Fabric portal.
+These steps use no Azure CLI.
 
-### Path A: Fabric portal
+| Source | Code to copy | Function to publish | Data access |
+|---|---|---|---|
+| Car parks | `fabric-udf/function_app.py` | `get_car_parks` | Managed Lakehouse connection, alias `carparkslh` |
+| PMTiles | `fabric-udf/pmtiles/function_app.py` | `get_gpstrace_pmtiles` | Managed Lakehouse connection, alias `gpstracelh` |
+| Airports | `fabric-udf/airports/function_app.py` | `get_airports` | Managed Lakehouse connection, alias `airportslh` |
+| Eventstream | `fabric-udf/eventstream/function_app.py` | `get_bikes` | Kusto SDK using the UDF runtime's own managed identity |
 
-Repeat these steps for Car Parks, PMTiles, Airports, and Eventstream:
+Repeat the following for each source:
 
-1. In the target workspace, create a **User Data Functions** item.
-2. Paste the source's Python:
+1. In the target workspace, select **New item** and create a **User Data
+   Functions** item.
+2. Open the item in **Develop** mode and replace its Python with the source file
+   listed above.
+3. For Car parks, PMTiles, and Airports:
+   1. Open **Manage connections**.
+   2. Add the target Lakehouse.
+   3. Use the exact alias shown in the table. Connection aliases must be
+      alphanumeric; do not use `_` or `-`.
+4. For Eventstream:
+   1. Before copying the code, update `CLUSTER_URI`, `DATABASE`, and `TABLE` in
+      `fabric-udf/eventstream/function_app.py` to the destination created in
+      section 3.
+   2. In the UDF environment/library management experience, add the public
+      PyPI package `azure-kusto-data` version `6.0.4`.
+5. Publish the item. Fabric imposes an approximately two-minute cooldown before
+   the same item can be published again.
 
-   | Source | Python file | Function |
-   |---|---|---|
-   | Car parks | `fabric-udf/function_app.py` | `get_car_parks` |
-   | PMTiles | `fabric-udf/pmtiles/function_app.py` | `get_gpstrace_pmtiles` |
-   | Airports | `fabric-udf/airports/function_app.py` | `get_airports` |
-   | Eventstream | `fabric-udf/eventstream/function_app.py` | `get_bikes` |
+### Turn on the Public URL and copy it
 
-3. For Car Parks, PMTiles, and Airports, open **Manage connections**, add the
-   target Lakehouse, and set the alias to exactly match the Python:
+Perform these exact steps after publishing each UDF:
 
-   | Source | Alias |
-   |---|---|
-   | Car parks | `carparkslh` |
-   | PMTiles | `gpstracelh` |
-   | Airports | `airportslh` |
+1. In the UDF item, change the mode dropdown from **Develop** to **Run only**.
+2. In **Functions Explorer**, select the function named in the table above.
+3. Open **⋯ (More options) -> Properties** for that function.
+4. In the **Properties** pane, set **Public access = On**.
+5. Copy the **Public URL** field.
 
-   Aliases must be alphanumeric only; do not use `_` or `-`.
-4. For Eventstream, edit `CLUSTER_URI`, `DATABASE`, and `TABLE` near the top of
-   `fabric-udf/eventstream/function_app.py`.
-5. For Eventstream, add the public PyPI library `azure-kusto-data` version
-   `6.0.4` to the UDF environment. The checked-in spec does this automatically
-   on the scripted path.
-6. Ensure every function parameter has a type annotation and no default value.
-7. Select **Publish** and wait for publishing to complete. Fabric enforces an
-   approximately two-minute cooldown between publishes.
-8. Switch from **Develop** to **Run only**.
-9. For the data function, select **... -> Properties**, set **Public access**
-   to **On**, and copy the **Public URL**.
-
-Record:
+Record all four URLs:
 
 ```text
 <carparkUdfUrl>
@@ -220,279 +243,437 @@ Record:
 <eventstreamUdfUrl>
 ```
 
-### Path B: scripted definition upload
+**Public access does not mean anonymous access.** The URL is internet-reachable,
+but every invocation still requires a Microsoft Entra token for
+`https://analysis.windows.net/powerbi/api`.
 
-The generic deployment command is:
+> **Optional CLI alternative:** the scripts under `fabric-udf/` can upload UDF
+> definitions, but they require an Azure CLI user sign-in. They are not needed
+> for this portal-only flow, and publishing plus Public URL configuration still
+> happen in the Fabric portal.
 
-```powershell
-cd <repoRoot>\fabric-udf
-python deploy_udf.py --spec <source>/spec.json --script <source>/function_app.py --workspace <newWs>
+## 5. Grant the UDF identities
+
+### 5.1 Smoke-test every UDF to surface auth errors
+
+After all four UDFs are created and published, proactively invoke every
+function once:
+
+1. Open each UDF item and switch it to **Run only** mode.
+2. In **Functions Explorer**, select the function.
+3. Use the portal's **Test** or **Run** action to invoke it. Alternatively, POST
+   to its Public URL with a Microsoft Entra token for
+   `https://analysis.windows.net/powerbi/api`.
+4. Confirm or record the result before moving to the next UDF.
+
+Expected first-run results:
+
+| UDF | Function | Expected result |
+|---|---|---|
+| Car parks | `get_car_parks` | Succeeds because its managed Lakehouse connection is already wired |
+| PMTiles | `get_gpstrace_pmtiles` | Succeeds because its managed Lakehouse connection is already wired |
+| Airports | `get_airports` | Succeeds because its managed Lakehouse connection is already wired |
+| Eventstream | `get_bikes` | Initially fails with HTTP 403 because its own managed identity has not yet been granted Kusto Database Viewer |
+
+The Eventstream failure should name the exact identity that Kusto rejected:
+
+```text
+Principal 'aadapp=<clientId>;<tenantId>' is not authorized to read database '<db>'
 ```
 
-Run it for the generic-spec sources:
+Do not guess or construct this principal in advance. Run the UDF, read the 403,
+and grant exactly the complete `aadapp=<clientId>;<tenantId>` principal named
+in the error. Use the same discovery process for any UDF that queries
+Kusto/Eventhouse through its own managed identity.
 
-```powershell
-python deploy_udf.py --spec pmtiles/spec.json --script pmtiles/function_app.py --workspace <newWs>
-python deploy_udf.py --spec airports/spec.json --script airports/function_app.py --workspace <newWs>
-python deploy_udf.py --spec eventstream/spec.json --script eventstream/function_app.py --workspace <newWs>
-```
+### 5.2 Grant the Kusto-backed UDF identity
 
-Before running the Lakehouse commands, edit each applicable `spec.json`
-`connectedDataSources` entry so:
+Only the Kusto-backed **Eventstream Function method** needs this manual grant
+for its UDF runtime identity.
 
-- `workspaceId` is `<newWs>`.
-- `artifactId` is `<lakehouseId>`.
-- The alias remains identical to the `@udf.connection` alias in Python.
+Why this grant exists:
 
-Before deploying Eventstream, update the Python Kusto constants as described in
-Path A.
+- The Eventstream UDF calls Kusto through `azure-kusto-data`.
+- Kusto/Eventhouse is not being supplied to this UDF as a Fabric managed
+  connection.
+- The UDF therefore authenticates to Kusto with the UDF runtime's **own managed
+  identity**.
+- Kusto must explicitly authorize that identity as a database Viewer.
 
-Car Parks predates the generic `spec.json` format in this repository. Deploy it
-with the equivalent source-specific script:
+This UDF identity grant is **not** needed:
 
-```powershell
-cd <repoRoot>\fabric-udf
-python deploy.py --workspace <newWs> --lakehouse <lakehouseId> --create CarParksApi
-```
+- For any Direct method.
+- For a UDF that reads data through a Fabric managed connection.
+- If the Eventstream Function method is never invoked.
 
-To update an existing UDF rather than create a new item, pass `--udf <udfId>`
-to the appropriate deployer.
+To grant the principal surfaced by the smoke test:
 
-The scripts create/update the definition headlessly, but publishing is still a
-portal operation. For each item, complete **Publish -> Run only -> function
-... -> Properties -> Public access On**, then record the Public URL. The same
-alias, no-default-parameter, and approximately two-minute publish-cooldown
-constraints apply to both paths.
-
-## 5. Grant permissions
-
-There are two separate runtime identities:
-
-- The Eventstream UDF has its own Fabric-managed runtime identity.
-- The Azure App Service created in step 6 has its own system-assigned managed
-  identity.
-
-### Grant the Kusto-backed Eventstream UDF
-
-For the Eventstream UDF:
-
-1. Invoke the published function once.
-2. Expect HTTP 403 with an error like:
-
-   ```text
-   Principal 'aadapp=<clientId>;<tenantId>' is not authorized to read database '<db>'
-   ```
-
-3. Copy the complete principal, including the tenant ID.
-4. As an Eventhouse database admin, run this in the KQL query editor:
+1. Copy the complete principal value from the 403, including both IDs.
+2. In the Fabric portal, open the destination KQL database or its KQL queryset
+   editor.
+3. Run:
 
    ```kusto
-   .add database <db> viewers ('aadapp=<clientId>;<tenantId>') 'Allow the Fabric UDF to read this database'
+   .add database <db> viewers ('aadapp=<clientId>;<tenantId>') 'Eventstream UDF managed identity'
    ```
 
-5. Invoke the function again and confirm it succeeds.
+4. Return to the Eventstream UDF in **Run only** mode and invoke `get_bikes`
+   again.
+5. Confirm that it now succeeds.
 
-### Grant the App Service managed identity
+This is a KQL control command run in the Fabric portal query editor. It is not
+an Azure CLI command.
 
-After creating the App Service identity in step 6, grant it:
+## 6. Provision the Azure App Service + enable its managed identity
 
-| Target | Required permission |
-|---|---|
-| Fabric workspace | **Viewer**, which covers OneLake file reads and the Lakehouse SQL analytics endpoint in user-identity mode |
-| Bicycle KQL database | **Database Viewer** |
-| Each of the four UDF items | **Execute** |
-| Azure Maps account | Azure RBAC role **Azure Maps Data Reader** |
+Use the Azure portal instructions in
+[Quickstart: Create a Node.js web app](https://learn.microsoft.com/en-us/azure/app-service/quickstart-nodejs?tabs=linux&pivots=development-environment-azure-portal)
+to create the Web App.
 
-For the KQL database, use the App Service managed identity's client ID and the
-target tenant ID:
+Use these settings:
 
-```kusto
-.add database <db> viewers ('aadapp=<miClientId>;<tenantId>') 'Allow the map app to query this database'
-```
+- **Publish:** Code
+- **Operating system:** Linux
+- **Runtime stack:** Node 20 LTS or Node 22 LTS
+- **Region and App Service plan:** select values appropriate for the target
+  subscription
+- **Web App name:** globally unique, for example
+  `fabric-maps-tejitpabari`
 
-Share each UDF item with the managed identity and grant **Execute**, or assign a
-workspace role that grants UDF execution. Workspace **Viewer** may not grant
-UDF **Execute**, so explicitly share each UDF when invocation returns 403.
+After creation:
 
-The Lakehouse SQL analytics endpoint is used in **user identity mode**. Do not
-run `GRANT SELECT` for the app identity; its OneLake/workspace role governs
-SQL reads.
+1. Open the Web App in the Azure portal.
+2. Under **Settings -> Configuration -> General settings**, set the startup
+   command to:
 
-To grant Azure Maps access with Azure CLI:
+   ```text
+   node server/server.js
+   ```
 
-```powershell
-$mapsId = az maps account show -g <mapsResourceGroup> -n <mapsAccount> --query id -o tsv
-az role assignment create --assignee-object-id <principalId> --assignee-principal-type ServicePrincipal --role "Azure Maps Data Reader" --scope $mapsId
-```
+3. Enable **HTTPS Only**.
+4. Follow
+   [Use a managed identity in App Service](https://learn.microsoft.com/en-us/azure/app-service/overview-managed-identity?tabs=portal):
+   - Open **Settings -> Identity**.
+   - On **System assigned**, set **Status = On**.
+   - Save.
+5. Record the identity's **Object (principal) ID** shown on the Identity page.
+6. Record the identity's **Application (client) ID**:
+   - Open **Microsoft Entra ID -> Enterprise applications**.
+   - Search for the enterprise application named like the Web App.
+   - Open it and copy its **Application ID**.
+7. In Microsoft Entra ID, also record the target **Tenant ID** from the
+   **Overview** page.
 
-## 6. Provision + deploy the Azure app
+The object ID is used by portal role-assignment pickers. The application/client
+ID and tenant ID are used in Kusto's `aadapp=<clientId>;<tenantId>` principal.
 
-Run these commands from a PowerShell terminal. Replace every angle-bracket
-placeholder.
+## 7. Grant the app managed identity its access
 
-```powershell
-az login
-az account set --subscription <subscriptionId>
+The Web App's system-assigned managed identity needs four kinds of access.
 
-# Create the resource group, or skip this command when it already exists.
-az group create -n <rg> -l <region>
-```
+### 7.1 Enable the two Fabric tenant settings
 
-Create or select an Azure Maps account in the Azure portal. When creating one,
-place it in the target subscription/resource group, select an appropriate
-pricing tier for the deployment, and then copy its **Client ID** (also shown as
-the unique account ID) from the account's **Authentication** page. Record it as
-`<mapsClientId>`.
+A Fabric tenant administrator must open **Fabric Admin portal -> Tenant
+settings** and enable:
 
-Create the Linux App Service:
+1. **Service principals can use Fabric APIs**
+2. **Users can access data stored in OneLake with apps external to Fabric**
 
-```powershell
-az appservice plan create -g <rg> -n <plan> --is-linux --sku B1 -l <region>
-az webapp create -g <rg> -p <plan> -n <appName> --runtime "NODE:22-lts"
+If either setting is limited to a security group:
 
-az webapp identity assign -g <rg> -n <appName>
-az ad sp show --id <principalId> --query appId -o tsv
+1. Open **Microsoft Entra ID -> Groups** in the Azure portal.
+2. Open the allowed group.
+3. Select **Members -> Add members**.
+4. Search for the Web App managed identity by name and add it. Managed
+   identities appear in the member picker as enterprise applications/service
+   principals.
 
-az webapp config set -g <rg> -n <appName> --startup-file "node server/server.js"
-az webapp update -g <rg> -n <appName> --https-only true
+The first setting allows the Web App identity to call published UDFs. The
+second allows Direct OneLake access from App Service.
 
-az webapp config appsettings set -g <rg> -n <appName> --settings AZURE_MAPS_CLIENT_ID=<mapsClientId> WEBSITE_RUN_FROM_PACKAGE=1
-```
+### 7.2 Fabric workspace Viewer
 
-Record both identity values:
+In the Fabric portal:
 
-- `<principalId>`: object ID returned by `az webapp identity assign`
-- `<miClientId>`: application/client ID returned by `az ad sp show`
+1. Open the target workspace.
+2. Select **Manage access**.
+3. Select **Add people or groups**.
+4. Search for the Web App managed identity name.
+5. Select role **Viewer**.
+6. Select **Add**.
 
-Use those values for the grants in step 5. Set
-`AZURE_MAPS_CLIENT_ID=<maps account client/unique id>`. Do **not** set
-`AZURE_MAPS_KEY`; a browser-visible key is not needed. All other application
-configuration comes from `config/constants.js` baked into the deployment
-package.
+This covers OneLake file reads for Car parks and PMTiles and the Lakehouse SQL
+analytics endpoint in user-identity mode for Airports.
 
-### Reliable package deployment
+### 7.3 Kusto Database Viewer for the Web App
 
-Do not rely on the App Service Oryx build to restore dependencies during every
-redeployment. Oryx can leave `node_modules` incomplete; the observed symptom
-was:
+This grant is for the Eventstream **Direct** method. It is separate from the
+UDF identity grant in section 5.
+
+1. In the Fabric portal, open the bikes KQL database or its KQL queryset.
+2. In the query editor, run:
+
+   ```kusto
+   .add database <db> viewers ('aadapp=<appClientId>;<tenantId>') 'app MI'
+   ```
+
+Use the Web App managed identity's **application/client ID**, not its object ID.
+
+### 7.4 Azure Maps Data Reader
+
+Follow
+[Assign Azure roles using the Azure portal](https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments-portal):
+
+1. In the Azure portal, open the Azure Maps account.
+2. Open **Access control (IAM)**.
+3. Select **Add -> Add role assignment**.
+4. Choose **Azure Maps Data Reader**.
+5. For **Assign access to**, choose **Managed identity**.
+6. Select the subscription and **App Service**, then choose the Web App's
+   system-assigned identity.
+7. Select **Review + assign**.
+
+This role allows `/api/maps-token` to mint a usable Azure Maps token for the
+browser. Do not use or expose an Azure Maps subscription key.
+
+### 7.5 UDF Execute on all four UDF items
+
+For each UDF item in the Fabric portal:
+
+1. Open the UDF item.
+2. Select **Share** or **Manage permissions**.
+3. Add the Web App managed identity.
+4. Grant permission to run/execute the published function.
+
+Workspace Viewer may already allow invocation of published functions in some
+tenants. If a Function call returns 403, explicitly share each UDF with the
+managed identity and grant **Execute**.
+
+## 8. Configure app settings + deploy the code
+
+Before packaging, update the tenant-specific files listed in the final section
+of this runbook. For an already-created set of UDFs, only
+`config/constants.js` needs to change.
+
+### 8.1 App settings
+
+In the Azure portal:
+
+1. Open the Web App.
+2. Open **Settings -> Configuration -> Application settings**.
+3. Add:
+
+   | Name | Value |
+   |---|---|
+   | `AZURE_MAPS_CLIENT_ID` | The Azure Maps account client/unique ID |
+   | `WEBSITE_RUN_FROM_PACKAGE` | `1` |
+
+4. Save and allow the Web App to restart.
+
+Do **not** set `AZURE_MAPS_KEY`. A key would be returned to the browser by
+`/api/config`. With no key set, the app uses Microsoft Entra authentication and
+the managed identity.
+
+All other runtime configuration comes from `config/constants.js` baked into
+the deployment package.
+
+### 8.2 Prepare a deployment package
+
+The App Service platform build can leave `node_modules` incomplete across
+redeployments. The observed symptom was:
 
 ```text
 Cannot find module 'pmtiles'
 ```
 
-The reliable method is to install dependencies locally, include
-`node_modules`, and run the immutable zip through
-`WEBSITE_RUN_FROM_PACKAGE=1`:
+Install production dependencies locally and bundle `node_modules`:
 
 ```powershell
-cd <repoRoot>
+Set-Location <repoRoot>
 npm install
 
 Compress-Archive `
   -Path server,public,config,node_modules,package.json,package-lock.json `
-  -DestinationPath <zip> `
+  -DestinationPath fabric-maps.zip `
   -Force
-
-az webapp config appsettings set -g <rg> -n <appName> --settings WEBSITE_RUN_FROM_PACKAGE=1 AZURE_MAPS_CLIENT_ID=<mapsClientId>
-az webapp deploy -g <rg> -n <appName> --src-path <zip> --type zip
 ```
 
-The archive entries must be at the zip root: `server/`, `public/`, `config/`,
-`node_modules/`, `package.json`, and `package-lock.json`. Do not zip a parent
-folder around them.
-
-The Azure CLI may print HTTP 502 or appear to hang while polling the restart
-even when deployment succeeded. Wait about one minute, then verify the running
-app instead of immediately redeploying:
-
-```powershell
-curl.exe https://<appName>.azurewebsites.net/api/config
-```
-
-The app is public/anonymous by default; App Service Easy Auth is not enabled.
-To restrict access to signed-in users, enable **App Service Authentication
-(Easy Auth)** with Microsoft Entra ID.
-
-For the reference deployment, the placeholders were:
+The zip root must directly contain:
 
 ```text
-<subscriptionId> = d9eef650-a87c-433b-a236-0eaf3140d921
-<rg>             = maps-tejitpabari
-<appName>        = fabric-maps-tejitpabari
-<mapsAccount>    = maps-tejit
-<mapsClientId>   = e3c7516b-b6be-4ef3-be4b-1820312b2b13
+server/
+public/
+config/
+node_modules/
+package.json
+package-lock.json
 ```
 
-## 7. Update `config/constants.js`
+Do not add an extra parent directory around those entries. Keep
+`WEBSITE_RUN_FROM_PACKAGE=1` so App Service runs the immutable package rather
+than depending on a partial platform restore.
 
-[`config/constants.js`](../config/constants.js) is the **only application file
-to edit for a new tenant**. Replace its values with those recorded in steps 3
-and 4.
+### 8.3 Deploy without Azure CLI
 
-| Field | Value source |
-|---|---|
-| `workspaceId` | Target Fabric workspace item properties or workspace URL |
-| `lakehouseId` | Target Lakehouse item properties or item URL |
-| `files.carpark` | Lakehouse-relative path; normally `Files/GeoJson/Car_Parks.geojson` |
-| `files.pmtiles` | Lakehouse-relative path; normally `Files/GeoJson/GpsTrace.pmtiles` |
-| `sql.server` | Lakehouse SQL analytics endpoint connection string/server |
-| `sql.database` | Lakehouse SQL analytics endpoint database name |
-| `sql.table` | Airports table; normally `dbo.airports` |
-| `eventstream.kustoUri` | Eventstream destination KQL database query URI |
-| `eventstream.kustoDb` | Eventstream destination KQL database name |
-| `eventstream.table` | Eventstream destination table; for example `BicycleES` |
-| `mapsClientId` | Azure Maps account client/unique ID from its Authentication properties |
-| `udf.resource` | Keep `https://analysis.windows.net/powerbi/api` |
-| `udf.carpark` | Published `get_car_parks` Public URL |
-| `udf.pmtiles` | Published `get_gpstrace_pmtiles` Public URL |
-| `udf.airports` | Published `get_airports` Public URL |
-| `udf.eventstream` | Published `get_bikes` Public URL |
+Choose one option:
 
-After editing the constants, rebuild the zip and redeploy it with the commands
-in step 6. Do not add secrets or keys to `constants.js`.
+#### Option A: VS Code Azure App Service extension
 
-## 8. Verify
+1. Open the repository in VS Code.
+2. Open the **Azure** view and sign in.
+3. Under **App Service**, find the Web App.
+4. Right-click it and select **Deploy to Web App**.
+5. Select the prepared app folder/package and confirm the target Web App.
 
-First verify the server configuration:
+Ensure the deployed content includes the bundled `node_modules`.
 
-```powershell
-curl.exe https://<appName>.azurewebsites.net/api/config
+#### Option B: Azure portal Deployment Center
+
+Open the Web App's **Deployment Center** and configure GitHub Actions or an
+external Git source. Ensure the workflow/package installs and includes all
+dependencies and deploys the required root entries listed above.
+
+#### Option C: Kudu ZIP push
+
+1. Build `fabric-maps.zip` as described above.
+2. Open:
+
+   ```text
+   https://<appName>.scm.azurewebsites.net/ZipDeployUI
+   ```
+
+3. Sign in when prompted.
+4. Drag and drop `fabric-maps.zip` into the Kudu ZIP Deploy UI.
+
+Deployment can report HTTP 502 or appear to hang during the Web App restart
+even when the package was accepted. Wait for the restart, then verify
+`/api/config` before uploading again.
+
+The app is public/anonymous by default. To require user sign-in, enable
+[App Service Authentication (Easy Auth)](https://learn.microsoft.com/en-us/azure/app-service/overview-authentication-authorization).
+
+## 9. Verify
+
+### 9.1 Verify configuration
+
+Open:
+
+```text
+https://<appName>.azurewebsites.net/api/config
 ```
 
 Confirm:
 
 - The response is HTTP 200.
 - `maps.authType` is `"aad"`.
-- The response contains a Maps `clientId`, not a key.
-- All four sources and both methods are listed.
+- `maps.clientId` is the intended Azure Maps account client ID.
+- No Azure Maps key appears.
+- Exactly four sources are listed: `carpark`, `pmtiles`, `airports`, and
+  `eventstream`.
+- Each source lists `function` and `direct`.
 
-Then open:
+### 9.2 Verify all eight source/method combinations
+
+Open:
 
 ```text
 https://<appName>.azurewebsites.net
 ```
 
-For each source, select and load both **Function** and **Direct**:
+Load both methods for each source:
 
 | Source | Function | Direct |
 |---|---|---|
-| `carpark` | UDF | OneLake file |
-| `pmtiles` | UDF | OneLake file |
-| `airports` | UDF | SQL endpoint |
-| `eventstream` | UDF | Kusto REST |
+| `carpark` | Published Car parks UDF | OneLake file |
+| `pmtiles` | Published PMTiles UDF | OneLake file |
+| `airports` | Published Airports UDF | SQL analytics endpoint |
+| `eventstream` | Published Eventstream UDF | Kusto REST |
 
-Confirm the map renders for every combination. Map rendering requires the app
-identity to have **Azure Maps Data Reader**. Function methods require both
-**Service principals can use Fabric APIs** in the Fabric tenant and **Execute**
-permission for the app identity on the applicable UDF item.
+Confirm that the map renders for all eight combinations.
 
-## 9. Troubleshooting
+- Map rendering requires **Azure Maps Data Reader** on the Maps account.
+- All Function methods require **Service principals can use Fabric APIs** and
+  permission for the Web App identity to execute the applicable UDF.
+- The Eventstream Function method additionally requires the Eventstream UDF's
+  own identity to have Kusto Database Viewer, as described in section 5.
+- Eventstream Direct requires the Web App identity to have Kusto Database
+  Viewer.
+- Car parks and PMTiles Direct require the OneLake external-apps tenant setting
+  and workspace Viewer.
 
-| Symptom | Cause | Fix |
+For PMTiles, browser developer tools should show Range requests to:
+
+```text
+/api/pmtiles-archive?method=function
+/api/pmtiles-archive?method=direct
+```
+
+Those Range requests should return `206 Partial Content`. The browser decodes
+the vector tiles through the registered `pmtiles://` protocol.
+
+## 10. Troubleshooting
+
+| Symptom | Likely cause | Fix |
 |---|---|---|
-| Direct OneLake request returns 403 | The OneLake external-apps tenant setting is disabled or the app identity lacks workspace/Lakehouse read access | Enable **Users can access data stored in OneLake with apps external to Fabric** and grant the managed identity Fabric workspace **Viewer** |
-| SQL endpoint reports `Login failed` | The same OneLake external-apps setting or workspace identity access is missing | Enable the tenant setting and grant workspace **Viewer**; the endpoint is in user identity mode, so do not use `GRANT SELECT` |
-| UDF invocation returns 403 | Service-principal Fabric API access is disabled or the app identity lacks UDF Execute | Enable **Service principals can use Fabric APIs** and grant the App Service managed identity **Execute** on that UDF |
-| UDF returns 403 `not authorized to read database` | That UDF's own managed identity lacks Kusto Database Viewer | Copy its complete `aadapp=<clientId>;<tenantId>` principal from the error and run `.add database <db> viewers (...)` as DB admin |
-| Map is blank or Maps token request returns 401/403 | App Service managed identity lacks Azure Maps access | Grant **Azure Maps Data Reader** on the Maps account to the App Service identity |
-| App startup reports `MODULE_NOT_FOUND`, especially `Cannot find module 'pmtiles'` | Oryx deployment left `node_modules` incomplete | Run `npm install` locally, bundle `node_modules` in the zip, set `WEBSITE_RUN_FROM_PACKAGE=1`, and redeploy the package |
+| `/api/config` returns 404 or the app does not start | The startup command or package root is wrong | Set `node server/server.js`; ensure `server/`, `public/`, and `config/` are at the package root |
+| `/api/config` exposes Maps key auth | `AZURE_MAPS_KEY` is set | Remove `AZURE_MAPS_KEY`, retain `AZURE_MAPS_CLIENT_ID`, and restart |
+| Map is blank or `/api/maps-token` returns 401/403 | The Web App identity lacks Maps access or the Maps client ID is wrong | Grant **Azure Maps Data Reader** on the intended Maps account and verify `AZURE_MAPS_CLIENT_ID` |
+| Direct Car parks or PMTiles returns 403 | OneLake external-app access is disabled or the app identity lacks workspace access | Enable **Users can access data stored in OneLake with apps external to Fabric** and grant workspace **Viewer** |
+| Airports Direct reports `Login failed` | The same tenant setting or workspace access is missing | Enable the OneLake external-app setting and grant workspace **Viewer**; this app uses the SQL endpoint in user-identity mode |
+| Any Function method returns 403 before entering the function | Fabric API access is disabled for service principals or the app identity lacks UDF Execute | Enable **Service principals can use Fabric APIs** and share the UDF with the Web App managed identity granting Execute |
+| Eventstream Function returns `Principal 'aadapp=...' is not authorized to read database` | The UDF runtime identity lacks Kusto Database Viewer | Copy that exact principal and run the section 5 `.add database ... viewers` command in the Fabric KQL editor |
+| Eventstream Direct returns a Kusto authorization error | The Web App managed identity lacks Kusto Database Viewer | Run the section 7 command using the Web App identity's application/client ID and tenant ID |
+| PMTiles metadata loads but tile requests fail | The Range endpoint, archive, or source layer is wrong | Confirm requests use `/api/pmtiles-archive?method=function|direct`, return 206, and the archive declares an MVT vector layer |
+| Public-blob PMTiles fails in the browser | The blob is private or CORS/Range access is not available | Make the archive publicly readable and configure the host to allow the app origin and byte-range reads |
+| Startup logs show `Cannot find module 'pmtiles'` | App Service has an incomplete `node_modules` after redeployment | Run `npm install` locally, bundle `node_modules`, set `WEBSITE_RUN_FROM_PACKAGE=1`, and redeploy |
+| ZIP deployment reports 502 or hangs during restart | Kudu accepted the package but the restart/polling response failed | Wait about a minute and open `/api/config`; redeploy only if the running package is still old or unavailable |
+| A UDF cannot be republished immediately | Fabric's publish cooldown is active | Wait approximately two minutes, then publish again |
+
+## What to edit in code after creating new Fabric resources
+
+### App configuration
+
+[`config/constants.js`](../config/constants.js) is the **only application file
+to edit for a new tenant**.
+
+| File and field | Value to enter | Where to get it |
+|---|---|---|
+| `config/constants.js` -> `workspaceId` | Target workspace GUID | Fabric workspace URL or Properties |
+| `config/constants.js` -> `lakehouseId` | Target Lakehouse item GUID | Lakehouse URL or Properties |
+| `config/constants.js` -> `files.carpark` | Normally `Files/GeoJson/Car_Parks.geojson` | The path used when uploading the file |
+| `config/constants.js` -> `files.pmtiles` | Normally `Files/GeoJson/GpsTrace.pmtiles` | The path used when uploading the archive |
+| `config/constants.js` -> `sql.server` | SQL analytics endpoint server | Lakehouse SQL endpoint connection string/Properties |
+| `config/constants.js` -> `sql.database` | SQL analytics endpoint database | Lakehouse SQL endpoint connection information |
+| `config/constants.js` -> `sql.table` | Normally `dbo.airports` | Target Lakehouse table name |
+| `config/constants.js` -> `eventstream.kustoUri` | Eventhouse/Kusto query URI | Eventhouse or KQL database connection details |
+| `config/constants.js` -> `eventstream.kustoDb` | Bikes database name | Eventstream KQL destination |
+| `config/constants.js` -> `eventstream.table` | Bikes table name | Eventstream KQL destination |
+| `config/constants.js` -> `mapsClientId` | Azure Maps account client/unique ID | Azure Maps account -> Authentication |
+| `config/constants.js` -> `udf.resource` | Keep `https://analysis.windows.net/powerbi/api` | Fixed Fabric UDF token audience |
+| `config/constants.js` -> `udf.carpark` | `get_car_parks` Public URL | Car parks UDF -> Run only -> function Properties |
+| `config/constants.js` -> `udf.pmtiles` | `get_gpstrace_pmtiles` Public URL | PMTiles UDF -> Run only -> function Properties |
+| `config/constants.js` -> `udf.airports` | `get_airports` Public URL | Airports UDF -> Run only -> function Properties |
+| `config/constants.js` -> `udf.eventstream` | `get_bikes` Public URL | Eventstream UDF -> Run only -> function Properties |
+
+After editing `config/constants.js`, rebuild the zip and redeploy it using
+section 8. Do not add secrets or keys to this file.
+
+### UDF definitions
+
+These edits are needed only when the UDF items are created or recreated. They
+are not needed for a normal Web App redeployment.
+
+| File | What to edit | Value source |
+|---|---|---|
+| `fabric-udf/eventstream/function_app.py` | `CLUSTER_URI`, `DATABASE`, and `TABLE` | Eventhouse query URI and the Eventstream destination database/table |
+| `fabric-udf/*/spec.json` for Lakehouse-backed UDF definitions | `connectedDataSources[].artifactId` and `connectedDataSources[].workspaceId`; preserve the matching alphanumeric alias | Target Lakehouse ID and workspace ID from Fabric item Properties |
+
+The checked-in PMTiles and Airports UDFs have `spec.json` files. The Car parks
+UDF currently uses `fabric-udf/function_app.py` and is bound to the same target
+workspace/Lakehouse through **Manage connections** in the portal; if it is
+represented by a spec, use the same `artifactId`, `workspaceId`, and
+alphanumeric alias rules.
+
+For all three Lakehouse-backed UDFs--Car parks, PMTiles, and Airports--the
+connection alias in the Python decorator, the function metadata, and any
+`connectedDataSources` definition must match exactly.
