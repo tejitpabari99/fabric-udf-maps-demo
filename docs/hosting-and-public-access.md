@@ -26,7 +26,7 @@ const token = (await credential.getToken("https://storage.azure.com/.default")).
 ```
 
 That is the only structural change to `server/lib/fabric.js`. Everything else
-(routes, sources, pmtiles tile server) runs unchanged.
+(routes, sources, pmtiles range proxy) runs unchanged.
 Refs: [credential chains](https://learn.microsoft.com/en-us/azure/developer/javascript/sdk/authentication/credential-chains),
 [DefaultAzureCredential](https://learn.microsoft.com/en-us/javascript/api/@azure/identity/defaultazurecredential?view=azure-node-latest),
 [production best practices](https://learn.microsoft.com/en-us/azure/developer/javascript/sdk/authentication/best-practices).

@@ -6,7 +6,7 @@ async function payload(cfg, method) {
   const metadata = await getPmtilesMetadata(cfg, method);
   return {
     format: "pmtiles",
-    tilesUrl: `/api/pmtiles/{z}/{x}/{y}.mvt?method=${method}`,
+    archiveUrl: `/api/pmtiles-archive?method=${method}`,
     sourceLayer: metadata.sourceLayer,
     minZoom: metadata.minZoom,
     maxZoom: metadata.maxZoom,

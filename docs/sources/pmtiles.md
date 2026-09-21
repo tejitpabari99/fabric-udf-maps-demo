@@ -22,17 +22,24 @@ in memory.
 The proxy reads the archive directly from OneLake with the storage audience
 `https://storage.azure.com` and caches the same bytes in memory.
 
-Both methods then expose this tile route:
+Both methods then expose the archive over an HTTP **Range**-capable endpoint:
 
 ```text
-GET /api/pmtiles/{z}/{x}/{y}.mvt?method=function|direct
+GET /api/pmtiles-archive?method=function|direct     (supports Range: bytes=…)
 ```
 
-The `pmtiles` npm package reads individual MVT tiles from the archive. The
-proxy gunzips compressed directories and tile payloads, then returns the tile
-as `application/x-protobuf`. The browser uses
-`atlas.source.VectorTileSource`; line, polygon, and symbol layers reference the
-`GpsTrace` source layer.
+The browser uses the Azure Maps **native PMTiles protocol** — the `pmtiles.js`
+library registers a `pmtiles://` handler (`atlas.addProtocol("pmtiles", …)`) and
+a `VectorTileSource` with `url: "pmtiles://<archiveUrl>"`. The library issues
+Range requests to the archive endpoint and decodes MVT tiles **in the browser**;
+the server only relays byte ranges (no tile decode or gunzip). Line, polygon, and
+symbol layers reference the `GpsTrace` source layer.
+
+> Alternative (fully backend-free): if the `.pmtiles` file is copied to a public
+> Azure Blob / static host, point the `pmtiles://` URL straight at that public URL
+> and drop `/api/pmtiles-archive` entirely. This demo keeps the file in OneLake, so
+> the Range proxy relays the (authenticated) bytes. See
+> [add custom protocol PMTiles](https://learn.microsoft.com/en-us/azure/azure-maps/add-custom-protocol-pmtiles).
 
 ## Setup & permissions
 

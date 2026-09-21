@@ -128,10 +128,9 @@ async function getPmtilesMetadata(cfg, method) {
   };
 }
 
-async function getPmtilesTile(cfg, method, z, x, y) {
-  const { pmtiles } = await openPmtiles(cfg, method);
-  const tile = await pmtiles.getZxy(z, x, y);
-  return tile ? Buffer.from(tile.data) : null;
+async function getPmtilesArchive(cfg, method) {
+  const { archive } = await openPmtiles(cfg, method);
+  return archive; // full .pmtiles archive Buffer (cached per method)
 }
 
-module.exports = { FILE_PATH, getPmtilesMetadata, getPmtilesTile };
+module.exports = { FILE_PATH, getPmtilesMetadata, getPmtilesArchive };

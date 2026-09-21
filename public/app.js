@@ -55,6 +55,9 @@ function initMap(mapsAuth) {
     authOptions,
   });
 
+  map.events.add("tokenacquired", () => console.log("Azure Maps token acquired"));
+  map.events.add("error", (e) => console.error("Azure Maps error:", (e && e.error) || e));
+
   map.events.add("ready", () => {
     window.__map = map;
 
