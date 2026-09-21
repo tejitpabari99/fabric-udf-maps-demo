@@ -371,6 +371,23 @@ ID and tenant ID are used in Kusto's `aadapp=<clientId>;<tenantId>` principal.
 
 The Web App's system-assigned managed identity needs four kinds of access.
 
+> **Cross-tenant gotcha.** A system-assigned managed identity is **single-tenant**
+> — it exists only in the tenant of its Azure subscription, and Fabric's *Manage
+> access* only lists principals from the **workspace's own tenant**. If your Web
+> App and your Fabric workspace are in **different tenants**, the identity will
+> **not appear** in Manage access (7.2), Kusto grants (7.3), or UDF sharing (7.5).
+> Fixes:
+> 1. **Recommended:** create the Web App (and its managed identity) in a
+>    subscription that belongs to the **same tenant as the Fabric workspace**. Then
+>    everything below works with no secrets.
+> 2. **Cross-tenant:** replace the managed identity with a **multi-tenant Entra app
+>    registration** — admin-consent it into the Fabric workspace's tenant (that
+>    creates a service principal there, which then shows up in Manage access),
+>    grant *that* principal in 7.2–7.5, and point the Web App at it via app
+>    settings `AZURE_TENANT_ID` (the Fabric tenant), `AZURE_CLIENT_ID`,
+>    `AZURE_CLIENT_SECRET` (store the secret in Key Vault). `DefaultAzureCredential`
+>    uses it automatically — no code change. This reintroduces one secret.
+
 Which grants you actually need depends on which **methods** you expose:
 
 | Grant | Needed for | Skippable if… |
