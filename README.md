@@ -9,6 +9,9 @@ acquires Microsoft Entra tokens, calls Fabric data sources, and returns only the
 data the map needs. The browser never receives Fabric, OneLake, SQL, Kusto, or
 UDF access tokens.
 
+> **New here? Start with the [Overview](docs/overview.md)** — a single read that
+> explains what this is, how it works, and everything it does.
+
 ![Car parks rendered on Azure Maps](docs/images/carpark.png)
 
 ## Sources and methods
