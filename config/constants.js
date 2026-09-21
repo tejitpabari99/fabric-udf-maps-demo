@@ -30,12 +30,8 @@ module.exports = {
     table: "dbo.airports",
   },
 
-  // --- Fabric Eventhouse / Kusto (weather source) ---
-  kusto: {
-    uri: "https://trd-tne4bs58upcvrph9ak.z1.kusto.fabric.microsoft.com",
-    db: "TejitEH",
-    table: "Weather",
-  },
+  // --- Fabric Eventhouse / Kusto weather source: REMOVED (redundant with the
+  //     eventstream source, which is also Kusto-backed). ---
 
   // --- Eventstream landing table (bikes source, real-time) ---
   eventstream: {
@@ -55,7 +51,6 @@ module.exports = {
     carpark: "https://61077f32d21a4791b383cacbddf222f5.z61.msituserdatafunctions.fabric.microsoft.com/v1/workspaces/61077f32-d21a-4791-b383-cacbddf222f5/userDataFunctions/695fb9b2-483c-4921-8569-fbc2b18ae128/functions/get_car_parks/invoke",
     pmtiles: "https://61077f32d21a4791b383cacbddf222f5.z61.msituserdatafunctions.fabric.microsoft.com/v1/workspaces/61077f32-d21a-4791-b383-cacbddf222f5/userDataFunctions/f7bc2a9e-79cb-4b8b-8556-e48e70d4f572/functions/get_gpstrace_pmtiles/invoke",
     airports: "https://61077f32d21a4791b383cacbddf222f5.z61.msituserdatafunctions.fabric.microsoft.com/v1/workspaces/61077f32-d21a-4791-b383-cacbddf222f5/userDataFunctions/1fc5eb6d-f4d5-46b8-b650-2758fc856421/functions/get_airports/invoke",
-    kusto: "https://61077f32d21a4791b383cacbddf222f5.z61.msituserdatafunctions.fabric.microsoft.com/v1/workspaces/61077f32-d21a-4791-b383-cacbddf222f5/userDataFunctions/2bf9991d-0d90-4e53-9401-947e20735888/functions/get_weather/invoke",
     eventstream: "https://61077f32d21a4791b383cacbddf222f5.z61.msituserdatafunctions.fabric.microsoft.com/v1/workspaces/61077f32-d21a-4791-b383-cacbddf222f5/userDataFunctions/18f66db4-b5d9-4455-8f24-fa9f1b36d033/functions/get_bikes/invoke",
   },
 };

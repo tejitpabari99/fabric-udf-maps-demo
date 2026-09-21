@@ -22,15 +22,14 @@ Kusto, or UDF credentials. The BFF uses
   identity.
 - Locally, after `az login`, it authenticates as the signed-in developer.
 
-The demo exposes five sources through two methods each:
+The demo exposes four sources through two methods each:
 
 | Source | Function method | Direct method |
 |---|---|---|
-| Car parks | UDF reads a Lakehouse GeoJSON file | BFF reads the file through OneLake DFS |
-| PMTiles | UDF reads and returns a Lakehouse PMTiles archive | BFF reads the archive through OneLake DFS |
-| Airports | UDF queries the Lakehouse SQL analytics endpoint | BFF connects to the SQL analytics endpoint |
-| Weather | UDF queries a KQL database with the UDF identity | BFF queries Kusto REST with the app identity |
-| Bicycles | UDF queries the Eventstream destination with the UDF identity | BFF queries Kusto REST with the app identity |
+| `carpark` | UDF reads a Lakehouse GeoJSON file | BFF reads the file through OneLake DFS |
+| `pmtiles` | UDF reads and returns a Lakehouse PMTiles archive | BFF reads the archive through OneLake DFS |
+| `airports` | UDF queries the Lakehouse SQL analytics endpoint | BFF connects to the SQL analytics endpoint |
+| `eventstream` | UDF queries the Eventstream destination with the UDF identity | BFF queries Kusto REST with the app identity |
 
 All tenant-, workspace-, data-, Maps-, and UDF-specific values used by the app
 are centralized in [`config/constants.js`](../config/constants.js). It is the
@@ -58,8 +57,7 @@ Before starting, obtain:
 
 - A Fabric workspace in the target tenant.
 - Fabric workspace **Admin** permission.
-- Eventhouse database **Admin** permission for the Weather and bicycle KQL
-  databases.
+- Eventhouse database **Admin** permission for the bicycle KQL database.
 - An Azure subscription and resource group.
 - Permission to create Azure resources and assign Azure RBAC roles. Assigning
   roles normally requires **Owner** or **User Access Administrator** at the
@@ -86,7 +84,7 @@ required for direct OneLake access from Azure App Service.
 
 ## 3. Port the data
 
-Create the destination Fabric items and copy or recreate all five data sources.
+Create the destination Fabric items and copy or recreate all four data sources.
 Record every value called out below; those values are used in later steps.
 
 ### Find Fabric IDs and endpoints
@@ -150,24 +148,6 @@ layer.
      string, ending in `.msit-datawarehouse.fabric.microsoft.com`
    - `<sqlDatabase>`: the Lakehouse SQL endpoint database name
 
-### Kusto weather
-
-1. Create an Eventhouse and a KQL database.
-2. Ingest the Fabric **Weather** sample dataset into a table named `Weather`.
-3. Confirm `Weather` includes `BeginLat` and `BeginLon`, then run:
-
-   ```kusto
-   Weather
-   | where isnotnull(BeginLat) and BeginLat != 0
-     and isnotnull(BeginLon) and BeginLon != 0
-   | take 100
-   ```
-
-4. Record:
-   - `<weatherQueryUri>`: the cluster query URI
-   - `<weatherDatabase>`
-   - `<weatherTable>`, normally `Weather`
-
 ### Eventstream bicycles
 
 1. Create an Eventstream.
@@ -189,7 +169,7 @@ layer.
    - `<bikesDatabase>`
    - `<bikesTable>`
 
-## 4. Create & publish the 5 UDFs
+## 4. Create & publish the 4 UDFs
 
 Create one Fabric User Data Functions item per source. Every UDF is published
 as a Microsoft Entra-authenticated public endpoint; **Public access** makes the
@@ -197,7 +177,7 @@ endpoint internet-reachable, not anonymous.
 
 ### Path A: Fabric portal
 
-Repeat these steps for Car Parks, PMTiles, Airports, Weather, and Eventstream:
+Repeat these steps for Car Parks, PMTiles, Airports, and Eventstream:
 
 1. In the target workspace, create a **User Data Functions** item.
 2. Paste the source's Python:
@@ -207,7 +187,6 @@ Repeat these steps for Car Parks, PMTiles, Airports, Weather, and Eventstream:
    | Car parks | `fabric-udf/function_app.py` | `get_car_parks` |
    | PMTiles | `fabric-udf/pmtiles/function_app.py` | `get_gpstrace_pmtiles` |
    | Airports | `fabric-udf/airports/function_app.py` | `get_airports` |
-   | Weather | `fabric-udf/kusto/function_app.py` | `get_weather` |
    | Eventstream | `fabric-udf/eventstream/function_app.py` | `get_bikes` |
 
 3. For Car Parks, PMTiles, and Airports, open **Manage connections**, add the
@@ -220,19 +199,16 @@ Repeat these steps for Car Parks, PMTiles, Airports, Weather, and Eventstream:
    | Airports | `airportslh` |
 
    Aliases must be alphanumeric only; do not use `_` or `-`.
-4. For Weather, edit `CLUSTER_URI` and `DATABASE` near the top of
-   `fabric-udf/kusto/function_app.py`. The table is referenced by the `QUERY`
-   constant; change `Weather` there if `<weatherTable>` is different.
-5. For Eventstream, edit `CLUSTER_URI`, `DATABASE`, and `TABLE` near the top of
+4. For Eventstream, edit `CLUSTER_URI`, `DATABASE`, and `TABLE` near the top of
    `fabric-udf/eventstream/function_app.py`.
-6. For Weather and Eventstream, add the public PyPI library
-   `azure-kusto-data` version `6.0.4` to the UDF environment. The checked-in
-   specs do this automatically on the scripted path.
-7. Ensure every function parameter has a type annotation and no default value.
-8. Select **Publish** and wait for publishing to complete. Fabric enforces an
+5. For Eventstream, add the public PyPI library `azure-kusto-data` version
+   `6.0.4` to the UDF environment. The checked-in spec does this automatically
+   on the scripted path.
+6. Ensure every function parameter has a type annotation and no default value.
+7. Select **Publish** and wait for publishing to complete. Fabric enforces an
    approximately two-minute cooldown between publishes.
-9. Switch from **Develop** to **Run only**.
-10. For the data function, select **... -> Properties**, set **Public access**
+8. Switch from **Develop** to **Run only**.
+9. For the data function, select **... -> Properties**, set **Public access**
    to **On**, and copy the **Public URL**.
 
 Record:
@@ -241,7 +217,6 @@ Record:
 <carparkUdfUrl>
 <pmtilesUdfUrl>
 <airportsUdfUrl>
-<weatherUdfUrl>
 <eventstreamUdfUrl>
 ```
 
@@ -259,7 +234,6 @@ Run it for the generic-spec sources:
 ```powershell
 python deploy_udf.py --spec pmtiles/spec.json --script pmtiles/function_app.py --workspace <newWs>
 python deploy_udf.py --spec airports/spec.json --script airports/function_app.py --workspace <newWs>
-python deploy_udf.py --spec kusto/spec.json --script kusto/function_app.py --workspace <newWs>
 python deploy_udf.py --spec eventstream/spec.json --script eventstream/function_app.py --workspace <newWs>
 ```
 
@@ -270,8 +244,8 @@ Before running the Lakehouse commands, edit each applicable `spec.json`
 - `artifactId` is `<lakehouseId>`.
 - The alias remains identical to the `@udf.connection` alias in Python.
 
-Before deploying Weather or Eventstream, update the Python Kusto constants as
-described in Path A.
+Before deploying Eventstream, update the Python Kusto constants as described in
+Path A.
 
 Car Parks predates the generic `spec.json` format in this repository. Deploy it
 with the equivalent source-specific script:
@@ -294,13 +268,13 @@ constraints apply to both paths.
 
 There are two separate runtime identities:
 
-- Each Weather/Eventstream UDF has its own Fabric-managed runtime identity.
+- The Eventstream UDF has its own Fabric-managed runtime identity.
 - The Azure App Service created in step 6 has its own system-assigned managed
   identity.
 
-### Grant each Kusto-backed UDF
+### Grant the Kusto-backed Eventstream UDF
 
-For **each** of the Weather and Eventstream UDFs:
+For the Eventstream UDF:
 
 1. Invoke the published function once.
 2. Expect HTTP 403 with an error like:
@@ -318,9 +292,6 @@ For **each** of the Weather and Eventstream UDFs:
 
 5. Invoke the function again and confirm it succeeds.
 
-Each UDF has a different managed identity, so do not reuse one UDF's
-`aadapp=...` principal for the other.
-
 ### Grant the App Service managed identity
 
 After creating the App Service identity in step 6, grant it:
@@ -328,12 +299,11 @@ After creating the App Service identity in step 6, grant it:
 | Target | Required permission |
 |---|---|
 | Fabric workspace | **Viewer**, which covers OneLake file reads and the Lakehouse SQL analytics endpoint in user-identity mode |
-| Weather KQL database | **Database Viewer** |
 | Bicycle KQL database | **Database Viewer** |
-| Each of the five UDF items | **Execute** |
+| Each of the four UDF items | **Execute** |
 | Azure Maps account | Azure RBAC role **Azure Maps Data Reader** |
 
-For each KQL database, use the App Service managed identity's client ID and the
+For the KQL database, use the App Service managed identity's client ID and the
 target tenant ID:
 
 ```kusto
@@ -468,9 +438,6 @@ and 4.
 | `sql.server` | Lakehouse SQL analytics endpoint connection string/server |
 | `sql.database` | Lakehouse SQL analytics endpoint database name |
 | `sql.table` | Airports table; normally `dbo.airports` |
-| `kusto.uri` | Weather Eventhouse/KQL database query URI |
-| `kusto.db` | Weather KQL database name |
-| `kusto.table` | Weather table name; normally `Weather` |
 | `eventstream.kustoUri` | Eventstream destination KQL database query URI |
 | `eventstream.kustoDb` | Eventstream destination KQL database name |
 | `eventstream.table` | Eventstream destination table; for example `BicycleES` |
@@ -479,7 +446,6 @@ and 4.
 | `udf.carpark` | Published `get_car_parks` Public URL |
 | `udf.pmtiles` | Published `get_gpstrace_pmtiles` Public URL |
 | `udf.airports` | Published `get_airports` Public URL |
-| `udf.kusto` | Published `get_weather` Public URL |
 | `udf.eventstream` | Published `get_bikes` Public URL |
 
 After editing the constants, rebuild the zip and redeploy it with the commands
@@ -498,7 +464,7 @@ Confirm:
 - The response is HTTP 200.
 - `maps.authType` is `"aad"`.
 - The response contains a Maps `clientId`, not a key.
-- All five sources and both methods are listed.
+- All four sources and both methods are listed.
 
 Then open:
 
@@ -510,11 +476,10 @@ For each source, select and load both **Function** and **Direct**:
 
 | Source | Function | Direct |
 |---|---|---|
-| Car parks | UDF | OneLake file |
-| PMTiles | UDF | OneLake file |
-| Airports | UDF | SQL endpoint |
-| Weather | UDF | Kusto REST |
-| Bicycles | UDF | Kusto REST |
+| `carpark` | UDF | OneLake file |
+| `pmtiles` | UDF | OneLake file |
+| `airports` | UDF | SQL endpoint |
+| `eventstream` | UDF | Kusto REST |
 
 Confirm the map renders for every combination. Map rendering requires the app
 identity to have **Azure Maps Data Reader**. Function methods require both

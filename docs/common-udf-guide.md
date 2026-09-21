@@ -125,7 +125,7 @@ Kusto/Eventhouse, external APIs, and Azure Blob Storage.
 
 Manual does not mean embedding a key or secret. The code authenticates as the
 UDF runtime's **own managed identity**, and that identity must be granted access
-on the target source. The Kusto and Eventstream UDFs in this repository use
+on the target source. The Eventstream UDF in this repository uses
 `azure-kusto-data` with `azure.identity.DefaultAzureCredential` and
 `with_azure_token_credential`:
 
@@ -145,8 +145,8 @@ result = client.execute(DATABASE, QUERY)
 ```
 
 There is no `@udf.connection` decorator or `connectedDataSources` entry for
-these Kusto-backed functions. After publishing, invoke each UDF once and copy
-the complete principal from the expected authorization error:
+this Kusto-backed function. After publishing, invoke the UDF once and copy the
+complete principal from the expected authorization error:
 
 ```text
 Principal 'aadapp=<clientId>;<tenantId>' is not authorized to read database '<database>'
@@ -158,9 +158,6 @@ Then, as an Eventhouse database administrator, grant that UDF identity
 ```kusto
 .add database <database> viewers ('aadapp=<clientId>;<tenantId>') 'Allow the Fabric UDF to read this database'
 ```
-
-Repeat the grant independently for the Weather UDF and the Eventstream UDF,
-because each UDF has its own managed identity.
 
 ## Create and upload the UDF definition
 
@@ -217,10 +214,9 @@ the `@udf.connection` decorator, and the function metadata identical.
 
 ### Kusto and Eventhouse
 
-Kusto/Eventhouse is not a supported UDF managed connection. The Kusto and
-Eventstream functions use `azure-kusto-data` with the UDF runtime's managed
-identity through `DefaultAzureCredential` or the SDK managed-identity builder
-fallback.
+Kusto/Eventhouse is not a supported UDF managed connection. The Eventstream
+function uses `azure-kusto-data` with the UDF runtime's managed identity
+through `DefaultAzureCredential` or the SDK managed-identity builder fallback.
 
 After the UDF is published:
 

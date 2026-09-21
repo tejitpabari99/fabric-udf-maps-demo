@@ -76,7 +76,7 @@ inside the BFF.
 |---|---|---|
 | OneLake files (carpark, pmtiles) | `https://storage.azure.com/.default` | Add the identity to the **Fabric workspace** (Viewer+) or share the Lakehouse **Read**; ideally a scoped OneLake data-access role on the `Files/…` path. Requires the tenant setting *"Users/SPs can access OneLake with apps external to Fabric"*. |
 | Lakehouse SQL endpoint (airports) | `https://database.windows.net/.default` | Item **Read** + `GRANT SELECT ON OBJECT::dbo.airports TO [<identity display name>]` on the SQL analytics endpoint. |
-| Eventhouse/Kusto (kusto, eventstream) | `https://api.kusto.windows.net/.default` | `.add database <db> viewers ('aadapp=<clientId>;<tenantId>')` (DB admin) — same command used for the per-UDF identities. |
+| Eventhouse/Kusto (eventstream) | `https://api.kusto.windows.net/.default` | `.add database <db> viewers ('aadapp=<clientId>;<tenantId>')` (DB admin) — same command used for the Eventstream UDF identity. |
 | **UDF invocation** (all Function methods) | `https://analysis.windows.net/powerbi/api/.default` | Grant the identity **Execute** on each UDF item (or a workspace role that includes it). |
 
 ### The UDF-invocation auth, specifically
@@ -136,7 +136,7 @@ uses the SP and never calls `az`. Remove them to fall back to `az login`.
 node -e "require('./server/lib/fabric').getAzToken('https://storage.azure.com').then(t=>console.log('token len',t.length)).catch(e=>{console.error(e.message);process.exit(1)})"
 # then exercise each source:
 #   http://localhost:3000/api/data?source=carpark&method=direct
-#   http://localhost:3000/api/data?source=kusto&method=function   (UDF Execute needed)
+#   http://localhost:3000/api/data?source=eventstream&method=function   (UDF Execute needed)
 ```
 
 Once the SP/MI is verified for all sources, the `az`-specific fallback can be

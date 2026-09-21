@@ -42,12 +42,6 @@ const cfg = {
     table: K.sql.table,
   },
 
-  kusto: {
-    uri: env("KUSTO_URI", K.kusto.uri),
-    db: env("KUSTO_DB", K.kusto.db),
-    table: K.kusto.table,
-  },
-
   eventstream: {
     kustoUri: env("EVENTSTREAM_KUSTO_URI", K.eventstream.kustoUri),
     kustoDb: env("EVENTSTREAM_KUSTO_DB", K.eventstream.kustoDb),
@@ -59,7 +53,6 @@ const cfg = {
     carpark: env("UDF_CARPARK_ENDPOINT", K.udf.carpark),
     pmtiles: env("UDF_PMTILES_ENDPOINT", K.udf.pmtiles),
     airports: env("UDF_AIRPORTS_ENDPOINT", K.udf.airports),
-    kusto: env("UDF_KUSTO_ENDPOINT", K.udf.kusto),
     eventstream: env("UDF_EVENTSTREAM_ENDPOINT", K.udf.eventstream),
   },
 };

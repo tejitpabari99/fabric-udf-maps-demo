@@ -1,6 +1,6 @@
 # Fabric data sources on Azure Maps
 
-This local demo renders five Microsoft Fabric data sources on Azure Maps. Each
+This local demo renders four Microsoft Fabric data sources on Azure Maps. Each
 source can be loaded through either a published Fabric User Data Function
 (`Function`) or a source-specific proxy integration (`Direct`).
 
@@ -18,8 +18,7 @@ UDF access tokens.
 | `Car_Parks.geojson` | `CarParksApi.get_car_parks` reads a Lakehouse file | OneLake DFS file read | [Car parks](docs/sources/carpark.md) |
 | `GpsTrace.pmtiles` | `GpsTracePmtilesApi.get_gpstrace_pmtiles` returns the archive as base64 | OneLake DFS file read | [PMTiles](docs/sources/pmtiles.md) |
 | `dbo.airports` | `AirportsApi.get_airports` queries the Lakehouse SQL connection | Lakehouse SQL analytics endpoint through `mssql` | [Airports](docs/sources/airports.md) |
-| `Weather` | `KustoApi.get_weather` queries Eventhouse with the UDF managed identity | Kusto REST | [Kusto weather](docs/sources/kusto.md) |
-| `BicycleES` | `EventstreamApi.get_bikes` queries the Eventstream landing table with the UDF managed identity | Kusto REST, with optional timed refresh | [Eventstream bikes](docs/sources/eventstream.md) |
+| `BicycleES` | `EventstreamApi.get_bikes` queries the Eventstream landing table (Kusto) with the UDF managed identity | Kusto REST, with optional timed refresh | [Eventstream bikes](docs/sources/eventstream.md) |
 
 All UDFs share the deployment, publishing, invocation, and permission model in
 the [common UDF guide](docs/common-udf-guide.md).
