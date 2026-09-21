@@ -394,7 +394,7 @@ Which grants you actually need depends on which **methods** you expose:
 |---|---|---|
 | 7.1 "Service principals can use Fabric APIs" | **Function** methods (invoke UDFs) | you never use Function methods |
 | 7.1 "OneLake external apps" | **Direct** methods (OneLake/SQL) | you never use Direct methods |
-| 7.2 Workspace Viewer | **Direct** methods (Car parks, PMTiles, Airports) | you only use Function methods |
+| 7.2 Workspace role (Viewer for SQL; **Contributor / OneLake role for OneLake files**) | **Direct** methods (Car parks, PMTiles, Airports) | you only use Function methods |
 | 7.3 Kusto DB Viewer (app MI) | **Direct** method (Eventstream) | you only use Function methods |
 | 7.4 Azure Maps Data Reader | the **map to render at all** | never (always required) |
 | 7.5 UDF Execute | **Function** methods (invoke UDFs) | you never use Function methods |
@@ -434,12 +434,26 @@ In the Fabric portal:
 1. Open the target workspace.
 2. Select **Manage access**.
 3. Select **Add people or groups**.
-4. Search for the Web App managed identity name.
-5. Select role **Viewer**.
+4. Search for the Web App identity name.
+5. Choose the role based on which Direct methods you need (see below).
 6. Select **Add**.
 
-This covers OneLake file reads for Car parks and PMTiles and the Lakehouse SQL
-analytics endpoint in user-identity mode for Airports.
+**Which role — this matters:**
+
+| Direct method | Data path | Minimum grant |
+|---|---|---|
+| Airports | Lakehouse **SQL analytics endpoint** | **Viewer** is enough |
+| Car parks, PMTiles | **OneLake files** (DFS/Blob API) | **Contributor** (or a OneLake data-access role — see below) |
+
+> ⚠️ **Viewer does NOT grant direct OneLake file access.** Viewer only covers the
+> SQL analytics endpoint / semantic model — that's why Airports Direct works on
+> Viewer but Car parks/PMTiles Direct return **403** ("User is not authorized …
+> for workspace/artifact"). For the OneLake file reads, grant the identity
+> **Contributor** (maps to OneLake ReadAll), **or** — for least privilege —
+> create a **OneLake data-access role** on the Lakehouse (Lakehouse → **Manage
+> OneLake data access**) that grants **Read** on `Files` and add the identity to
+> it. (The **Function** methods for Car parks/PMTiles don't need any of this —
+> the UDF reads OneLake inside Fabric.)
 
 ### 7.3 Kusto Database Viewer for the Web App — Direct method only
 
@@ -656,7 +670,10 @@ the vector tiles through the registered `pmtiles://` protocol.
 | `/api/config` returns 404 or the app does not start | The startup command or package root is wrong | Set `node server/server.js`; ensure `server/`, `public/`, and `config/` are at the package root |
 | `/api/config` exposes Maps key auth | `AZURE_MAPS_KEY` is set | Remove `AZURE_MAPS_KEY`, retain `AZURE_MAPS_CLIENT_ID`, and restart |
 | Map is blank or `/api/maps-token` returns 401/403 | The Web App identity lacks Maps access or the Maps client ID is wrong | Grant **Azure Maps Data Reader** on the intended Maps account and verify `AZURE_MAPS_CLIENT_ID` |
-| Direct Car parks or PMTiles returns 403 | OneLake external-app access is disabled or the app identity lacks workspace access | Enable **Users can access data stored in OneLake with apps external to Fabric** and grant workspace **Viewer** |
+| Direct Car parks or PMTiles returns 403 (OneLake) | The app identity has only **Viewer** (which covers SQL, not OneLake files), or OneLake external-app access is disabled | Grant the identity **Contributor** *or* a **OneLake data-access role** with Read on `Files` (Viewer is NOT enough for direct OneLake file reads); ensure **Users can access data stored in OneLake with apps external to Fabric** is on |
+| `AADSTS90002: Tenant '...' not found` on every token | `AZURE_TENANT_ID` is wrong (e.g. a client/other GUID pasted in) | Set `AZURE_TENANT_ID` to the app registration's **Directory (tenant) ID** (Overview page) |
+| Function returns 401, or Direct hits the wrong UDF/DB after moving tenants | Stale `UDF_*_ENDPOINT` / `EVENTSTREAM_*` **app settings override `config/constants.js`** | Delete those app settings — `constants.js` is the source of truth for them — then restart |
+| Changed an app setting but the app still uses the old value | With `WEBSITE_RUN_FROM_PACKAGE`, a settings change doesn't always restart the process | **Restart** the Web App explicitly and re-test |
 | Airports Direct reports `Login failed` | The same tenant setting or workspace access is missing | Enable the OneLake external-app setting and grant workspace **Viewer**; this app uses the SQL endpoint in user-identity mode |
 | Any Function method returns 403 before entering the function | Fabric API access is disabled for service principals or the app identity lacks UDF Execute | Enable **Service principals can use Fabric APIs** and share the UDF with the Web App managed identity granting Execute |
 | Eventstream Function returns `Principal 'aadapp=...' is not authorized to read database` | The UDF runtime identity lacks Kusto Database Viewer | Copy that exact principal and run the section 5 `.add database ... viewers` command in the Fabric KQL editor |
