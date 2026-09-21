@@ -371,6 +371,20 @@ ID and tenant ID are used in Kusto's `aadapp=<clientId>;<tenantId>` principal.
 
 The Web App's system-assigned managed identity needs four kinds of access.
 
+Which grants you actually need depends on which **methods** you expose:
+
+| Grant | Needed for | Skippable if… |
+|---|---|---|
+| 7.1 "Service principals can use Fabric APIs" | **Function** methods (invoke UDFs) | you never use Function methods |
+| 7.1 "OneLake external apps" | **Direct** methods (OneLake/SQL) | you never use Direct methods |
+| 7.2 Workspace Viewer | **Direct** methods (Car parks, PMTiles, Airports) | you only use Function methods |
+| 7.3 Kusto DB Viewer (app MI) | **Direct** method (Eventstream) | you only use Function methods |
+| 7.4 Azure Maps Data Reader | the **map to render at all** | never (always required) |
+| 7.5 UDF Execute | **Function** methods (invoke UDFs) | you never use Function methods |
+
+(The Function methods rely on the **UDF's own** identity/connection — the Lakehouse
+auto-wired connection, or the Kusto Viewer grant in 5.2 — not on 7.2/7.3.)
+
 ### 7.1 Enable the two Fabric tenant settings
 
 A Fabric tenant administrator must open **Fabric Admin portal -> Tenant
@@ -391,7 +405,12 @@ If either setting is limited to a security group:
 The first setting allows the Web App identity to call published UDFs. The
 second allows Direct OneLake access from App Service.
 
-### 7.2 Fabric workspace Viewer
+### 7.2 Fabric workspace Viewer — Direct methods only
+
+> **Skip this if you only use the Function (UDF) methods.** This grant is what
+> lets the *app's* identity read data directly; the Function methods never use it
+> (the UDF reads the data instead). Needed only for the Direct methods of Car
+> parks, PMTiles (OneLake), and Airports (SQL).
 
 In the Fabric portal:
 
@@ -405,10 +424,12 @@ In the Fabric portal:
 This covers OneLake file reads for Car parks and PMTiles and the Lakehouse SQL
 analytics endpoint in user-identity mode for Airports.
 
-### 7.3 Kusto Database Viewer for the Web App
+### 7.3 Kusto Database Viewer for the Web App — Direct method only
 
-This grant is for the Eventstream **Direct** method. It is separate from the
-UDF identity grant in section 5.
+> **Skip this if you only use the Function (UDF) method** for the eventstream.
+> This grant is for the Eventstream **Direct** method (the app's identity queries
+> Kusto). It is separate from — and not a substitute for — the UDF identity grant
+> in section 5.2 (which the Function method uses).
 
 1. In the Fabric portal, open the bikes KQL database or its KQL queryset.
 2. In the query editor, run:
