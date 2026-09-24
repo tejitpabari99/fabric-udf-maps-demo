@@ -5,7 +5,8 @@
   "description": "Render a Fabric Lakehouse GeoJSON (served via a Fabric User Data Function) on an Azure Maps web app.",
   "type": "commonjs",
   "scripts": {
-    "start": "node server/server.js"
+    "start": "node server/server.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=18"

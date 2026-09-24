@@ -2,10 +2,9 @@
 
 const zlib = require("zlib");
 const { Compression, PMTiles, TileType } = require("pmtiles");
-const { invokeUdf, readOneLakeFile } = require("./fabric");
+const { invokeUdf } = require("./fabric");
 
-const FILE_PATH = "Files/GeoJson/GpsTrace.pmtiles";
-const archiveCache = new Map();
+let archivePromise;
 
 function toArrayBuffer(buffer) {
   return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
@@ -47,7 +46,12 @@ function decodeFunctionOutput(output) {
   if (typeof output !== "string" || !output.trim()) {
     throw new Error("PMTiles UDF returned an empty or non-string response.");
   }
-  const archive = Buffer.from(output, "base64");
+  const encoded = output;
+  if (encoded.length % 4 !== 0 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded)) {
+    throw new Error("PMTiles UDF returned invalid base64.");
+  }
+  const archive = Buffer.from(encoded, "base64");
+  if (archive.toString("base64") !== encoded) throw new Error("PMTiles UDF returned invalid base64.");
   if (!archive.length) throw new Error("PMTiles UDF returned no archive bytes.");
   return archive;
 }
@@ -77,18 +81,10 @@ function featureCountFrom(metadata, sourceLayer) {
   return layer && Number.isFinite(layer.count) ? layer.count : null;
 }
 
-async function loadArchive(cfg, method) {
-  let archive;
-  if (method === "direct") {
-    archive = await readOneLakeFile(cfg, FILE_PATH, { binary: true });
-  } else if (method === "function") {
-    const output = await invokeUdf(cfg.udf.pmtiles, {}, cfg.udfResource);
-    archive = decodeFunctionOutput(output);
-  } else {
-    throw new Error(`Unsupported PMTiles method '${method}'.`);
-  }
-
-  const pmtiles = new PMTiles(new BufferSource(archive, `gpstrace:${method}`), undefined, decompress);
+async function loadArchive(cfg) {
+  const output = await invokeUdf(cfg.udf.pmtiles, {}, cfg.udfResource);
+  const archive = decodeFunctionOutput(output);
+  const pmtiles = new PMTiles(new BufferSource(archive, "gpstrace:udf"), undefined, decompress);
   const [header, metadata] = await Promise.all([pmtiles.getHeader(), pmtiles.getMetadata()]);
   if (header.tileType !== TileType.Mvt) {
     throw new Error(`GpsTrace.pmtiles contains tile type ${header.tileType}, not MVT vector tiles.`);
@@ -97,27 +93,24 @@ async function loadArchive(cfg, method) {
   const sourceLayer = sourceLayerFrom(metadata);
   return {
     archive,
-    pmtiles,
     header,
-    metadata,
     sourceLayer,
     featureCount: featureCountFrom(metadata, sourceLayer),
   };
 }
 
-function openPmtiles(cfg, method) {
-  if (!archiveCache.has(method)) {
-    const pending = loadArchive(cfg, method).catch((err) => {
-      archiveCache.delete(method);
+function openPmtiles(cfg) {
+  if (!archivePromise) {
+    archivePromise = loadArchive(cfg).catch((err) => {
+      archivePromise = undefined;
       throw err;
     });
-    archiveCache.set(method, pending);
   }
-  return archiveCache.get(method);
+  return archivePromise;
 }
 
-async function getPmtilesMetadata(cfg, method) {
-  const { header, sourceLayer, featureCount } = await openPmtiles(cfg, method);
+async function getPmtilesMetadata(cfg) {
+  const { header, sourceLayer, featureCount } = await openPmtiles(cfg);
   return {
     sourceLayer,
     minZoom: header.minZoom,
@@ -128,9 +121,9 @@ async function getPmtilesMetadata(cfg, method) {
   };
 }
 
-async function getPmtilesArchive(cfg, method) {
-  const { archive } = await openPmtiles(cfg, method);
-  return archive; // full .pmtiles archive Buffer (cached per method)
+async function getPmtilesArchive(cfg) {
+  const { archive } = await openPmtiles(cfg);
+  return archive;
 }
 
-module.exports = { FILE_PATH, getPmtilesMetadata, getPmtilesArchive };
+module.exports = { getPmtilesMetadata, getPmtilesArchive };
