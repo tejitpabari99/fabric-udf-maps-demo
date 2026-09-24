@@ -2,18 +2,18 @@
 
 ## 1. Project summary
 
-This application renders four Microsoft Fabric sources on Azure Maps through published Fabric User Data Functions (UDFs) and a Node Backend-for-Frontend (BFF).
+This application renders four Microsoft Fabric sources on Azure Maps through published Fabric User Data Functions (UDFs) and a Node app.
 
 The sources are a Lakehouse GeoJSON file, a Lakehouse PMTiles archive, a Lakehouse SQL table, and an Eventstream that feeds an Eventhouse/KQL table.
 
 ## 2. What the solution demonstrates
 
 - Published Fabric UDFs provide the controlled boundary between the application and Fabric data.
-- The Node BFF uses its hosted identity to broker UDF invocation and short-lived Azure Maps tokens without exposing those credentials to the browser.
+- The Node app uses its hosted identity to broker UDF invocation and short-lived Azure Maps tokens without exposing those credentials to the browser.
 - Three Fabric-managed Lakehouse connections provide source access for the car parks, GPS trace, and airports UDFs.
 - The Eventstream UDF uses its Fabric runtime identity to read the Eventhouse/KQL table.
 - Azure Maps uses Microsoft Entra authentication.
-- The BFF relays the PMTiles archive through HTTP Range responses, and the browser decodes its vector tiles.
+- The Node app relays the PMTiles archive through HTTP Range responses, and the browser decodes its vector tiles.
 - The rendered outcomes are car-park polygons, GPS trace vector tiles, airport points, and real-time bicycle points.
 
 ## 3. Documentation order
@@ -28,13 +28,13 @@ Follow this customer journey in order: prerequisites [Data setup](docs/data_setu
 
 ## 4. Architecture at a glance
 
-`Browser → fixed /api/* routes → Node BFF → published Fabric UDFs`
+`Browser → fixed /api/* routes → Node app → published Fabric UDFs`
 
 The browser uses `/api/config`, `/api/data?source=`, `/api/maps-token`, and `/api/pmtiles-archive`. It receives only map data and a short-lived Azure Maps token.
 
 Source data access stays inside Fabric through three managed Lakehouse connections and the Eventstream UDF runtime identity. The App Service managed identity only invokes the published UDFs and requests Azure Maps tokens.
 
-For PMTiles, the UDF returns the archive to the BFF, the BFF exposes archive bytes through an HTTP Range relay, and the browser performs vector-tile decoding.
+For PMTiles, the UDF returns the archive to the Node app, the Node app exposes archive bytes through an HTTP Range relay, and the browser performs vector-tile decoding.
 
 See [the detailed architecture](docs/setup.md#2-architecture) for the end-to-end request flow.
 
@@ -42,10 +42,10 @@ See [the detailed architecture](docs/setup.md#2-architecture) for the end-to-end
 
 | Source | Fabric location | UDF file / function | Rendered result |
 | --- | --- | --- | --- |
-| [Car parks](docs/setup.md#6-car-parks-udf) | Lakehouse file `Files/GeoJson/Car_Parks.geojson` | `carpark_function_app.py` / `get_car_parks` | polygons |
-| [GPS trace](docs/setup.md#7-pmtiles-udf) | Lakehouse file `Files/GeoJson/GpsTrace.pmtiles` | `pmtiles_function_app.py` / `get_gpstrace_pmtiles` | vector tiles (PMTiles) |
-| [Airports](docs/setup.md#8-airports-udf) | Lakehouse SQL table `dbo.airports` | `airports_function_app.py` / `get_airports` | points |
-| [Bicycles](docs/setup.md#9-eventstream-udf) | Eventstream → Eventhouse/KQL table `BicycleES` | `eventstream_function_app.py` / `get_bikes` | points (real-time) |
+| [Car parks](docs/setup.md#3-set-up-the-lakehouse-udfs) | Lakehouse file `Files/Car_Parks.geojson` | `carpark_function_app.py` / `get_car_parks` | polygons |
+| [GPS trace](docs/setup.md#3-set-up-the-lakehouse-udfs) | Lakehouse file `Files/GpsTrace.pmtiles` | `pmtiles_function_app.py` / `get_gpstrace_pmtiles` | vector tiles (PMTiles) |
+| [Airports](docs/setup.md#3-set-up-the-lakehouse-udfs) | Lakehouse SQL table `dbo.airports` | `airports_function_app.py` / `get_airports` | points |
+| [Bicycles](docs/setup.md#4-set-up-the-eventstream-udf) | Eventstream → Eventhouse/KQL table `BicycleES` | `eventstream_function_app.py` / `get_bikes` | points (real-time) |
 
 ## 6. Expected result
 
@@ -53,7 +53,7 @@ The deployed application renders each Fabric source as an interactive Azure Maps
 
 ![Car parks rendered on Azure Maps](docs/images/carpark.png)
 
-See the matching setup outcomes for [GPS trace vector tiles](docs/setup.md#7-pmtiles-udf), [airport points](docs/setup.md#8-airports-udf), and [real-time bicycle points](docs/setup.md#9-eventstream-udf).
+See the matching setup steps for [GPS trace vector tiles](docs/setup.md#3-set-up-the-lakehouse-udfs), [airport points](docs/setup.md#3-set-up-the-lakehouse-udfs), and [real-time bicycle points](docs/setup.md#4-set-up-the-eventstream-udf).
 
 ## 7. Repository layout
 
@@ -76,7 +76,7 @@ docs/
   auth.md
 ```
 
-`config/constants.js` contains only `mapsClientId` plus `udf.*` values for the published endpoints and their token resource. `fabric-udf/` contains the four Python UDF implementations. `server/` contains the Node BFF and its fixed `/api/config`, `/api/data?source=`, `/api/maps-token`, and `/api/pmtiles-archive` routes. `public/` contains the browser application. `docs/data/` contains customer-uploaded source files, `docs/images/` contains rendered outcomes, and the five guides own the ordered customer journey.
+`config/constants.js` contains only `mapsClientId`, `udf.resource`, `udf.carpark`, `udf.pmtiles`, `udf.airports`, and `udf.eventstream`. `fabric-udf/` contains the four Python UDF implementations. `server/` contains the Node app and its fixed `/api/config`, `/api/data?source=`, `/api/maps-token`, and `/api/pmtiles-archive` routes. `public/` contains the browser application. `docs/data/` contains customer-uploaded source files, `docs/images/` contains rendered outcomes, and the five guides own the ordered customer journey.
 
 ## 8. Security summary
 
