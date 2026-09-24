@@ -1,105 +1,85 @@
-# Fabric data sources on Azure Maps
+# Fabric sources on Azure Maps
 
-This local demo renders four Microsoft Fabric data sources on Azure Maps. Each
-source can be loaded through either a published Fabric User Data Function
-(`Function`) or a source-specific proxy integration (`Direct`).
+## 1. Project summary
 
-The Node server is a Backend-for-Frontend (BFF): it serves the browser app,
-acquires Microsoft Entra tokens, calls Fabric data sources, and returns only the
-data the map needs. The browser never receives Fabric, OneLake, SQL, Kusto, or
-UDF access tokens.
+This application renders four Microsoft Fabric sources on Azure Maps through published Fabric User Data Functions (UDFs) and a Node Backend-for-Frontend (BFF).
 
-> **New here? Start with the [Overview](docs/overview.md)** — a single read that
-> explains what this is, how it works, and everything it does.
+The sources are a Lakehouse GeoJSON file, a Lakehouse PMTiles archive, a Lakehouse SQL table, and an Eventstream that feeds an Eventhouse/KQL table.
+
+## 2. What the solution demonstrates
+
+- Published Fabric UDFs provide the controlled boundary between the application and Fabric data.
+- The Node BFF uses its hosted identity to broker UDF invocation and short-lived Azure Maps tokens without exposing those credentials to the browser.
+- Three Fabric-managed Lakehouse connections provide source access for the car parks, GPS trace, and airports UDFs.
+- The Eventstream UDF uses its Fabric runtime identity to read the Eventhouse/KQL table.
+- Azure Maps uses Microsoft Entra authentication.
+- The BFF relays the PMTiles archive through HTTP Range responses, and the browser decodes its vector tiles.
+- The rendered outcomes are car-park polygons, GPS trace vector tiles, airport points, and real-time bicycle points.
+
+## 3. Documentation order
+
+Follow this customer journey in order: prerequisites [Data setup](docs/data_setup.md) + [UDF guide](docs/udf-guide.md) → [UDF setup](docs/setup.md) → [App deployment](docs/app-guide.md) → [Authorization](docs/auth.md).
+
+1. [Data setup](docs/data_setup.md) owns creation and verification of the four Fabric data inputs.
+2. [UDF guide](docs/udf-guide.md) owns the reusable UDF concepts, connection models, lifecycle, contracts, and limits needed before setup.
+3. [UDF setup](docs/setup.md) owns the architecture, four UDF creation flows, publication, and application configuration seam.
+4. [App deployment](docs/app-guide.md) owns Azure Maps creation, App Service creation, portal deployment, application configuration, and hosted verification.
+5. [Authorization](docs/auth.md) owns every identity, tenant setting, permission, role, scope, token audience, and authorization troubleshooting step.
+
+## 4. Architecture at a glance
+
+`Browser → fixed /api/* routes → Node BFF → published Fabric UDFs`
+
+The browser uses `/api/config`, `/api/data?source=`, `/api/maps-token`, and `/api/pmtiles-archive`. It receives only map data and a short-lived Azure Maps token.
+
+Source data access stays inside Fabric through three managed Lakehouse connections and the Eventstream UDF runtime identity. The App Service managed identity only invokes the published UDFs and requests Azure Maps tokens.
+
+For PMTiles, the UDF returns the archive to the BFF, the BFF exposes archive bytes through an HTTP Range relay, and the browser performs vector-tile decoding.
+
+See [the detailed architecture](docs/setup.md#architecture) for the end-to-end request flow.
+
+## 5. UDF-only source table
+
+| Source | Fabric location | UDF file / function | Rendered result |
+| --- | --- | --- | --- |
+| [Car parks](docs/setup.md#car-parks-udf) | Lakehouse file `Files/GeoJson/Car_Parks.geojson` | `carpark_function_app.py` / `get_car_parks` | polygons |
+| [GPS trace](docs/setup.md#pmtiles-udf) | Lakehouse file `Files/GeoJson/GpsTrace.pmtiles` | `pmtiles_function_app.py` / `get_gpstrace_pmtiles` | vector tiles (PMTiles) |
+| [Airports](docs/setup.md#airports-udf) | Lakehouse SQL table `dbo.airports` | `airports_function_app.py` / `get_airports` | points |
+| [Bicycles](docs/setup.md#eventstream-udf) | Eventstream → Eventhouse/KQL table `BicycleES` | `eventstream_function_app.py` / `get_bikes` | points (real-time) |
+
+## 6. Expected result
+
+The deployed application renders each Fabric source as an interactive Azure Maps layer. Car parks are the lead example:
 
 ![Car parks rendered on Azure Maps](docs/images/carpark.png)
 
-## Sources and methods
+See the matching setup outcomes for [GPS trace vector tiles](docs/setup.md#pmtiles-udf), [airport points](docs/setup.md#airports-udf), and [real-time bicycle points](docs/setup.md#eventstream-udf).
 
-| Source | Function method | Direct method | Guide |
-|---|---|---|---|
-| `Car_Parks.geojson` | `CarParksApi.get_car_parks` reads a Lakehouse file | OneLake DFS file read | [Car parks](docs/sources/carpark.md) |
-| `GpsTrace.pmtiles` | `GpsTracePmtilesApi.get_gpstrace_pmtiles` returns the archive as base64 | OneLake DFS file read | [PMTiles](docs/sources/pmtiles.md) |
-| `dbo.airports` | `AirportsApi.get_airports` queries the Lakehouse SQL connection | Lakehouse SQL analytics endpoint through `mssql` | [Airports](docs/sources/airports.md) |
-| `BicycleES` | `EventstreamApi.get_bikes` queries the Eventstream landing table (Kusto) with the UDF managed identity | Kusto REST, with optional timed refresh | [Eventstream bikes](docs/sources/eventstream.md) |
-
-All UDFs share the creation, publishing, invocation, and permission model in
-the [common UDF guide](docs/common-udf-guide.md).
-
-- [Port to another tenant / deploy from scratch](docs/port-and-setup-runbook.md)
-
-## Run locally
-
-Prerequisites:
-
-- Node.js 18 or later
-- Azure CLI
-- An Azure Maps subscription key
-- A Microsoft Entra identity with access to the Fabric sources you plan to use
-
-```powershell
-az login
-Copy-Item .env.example .env
-# Edit .env and set AZURE_MAPS_KEY.
-npm install
-npm start
-```
-
-Open <http://localhost:3000>, select a source and method, and load the data.
-
-The shared defaults point to:
-
-- Workspace: `61077f32-d21a-4791-b383-cacbddf222f5`
-- Lakehouse: `TejitLH`
-- Lakehouse ID: `b97fcfa2-6e58-4898-ab81-00ed5d1396cb`
-
-## Authentication, keys, and permissions
-
-The proxy obtains tokens from the active Azure CLI account with:
+## 7. Repository layout
 
 ```text
-az account get-access-token --resource <audience>
+config/constants.js
+fabric-udf/
+  carpark_function_app.py
+  pmtiles_function_app.py
+  airports_function_app.py
+  eventstream_function_app.py
+server/
+public/
+docs/
+  data/
+  images/
+  data_setup.md
+  udf-guide.md
+  setup.md
+  app-guide.md
+  auth.md
 ```
 
-Whoever runs `npm start` must first run `az login` and must have permission on
-each Direct source and each UDF they invoke.
+`config/constants.js` contains only `mapsClientId` plus `udf.*` values for the published endpoints and their token resource. `fabric-udf/` contains the four Python UDF implementations. `server/` contains the Node BFF and its fixed `/api/config`, `/api/data?source=`, `/api/maps-token`, and `/api/pmtiles-archive` routes. `public/` contains the browser application. `docs/data/` contains customer-uploaded source files, `docs/images/` contains rendered outcomes, and the five guides own the ordered customer journey.
 
-| Operation | Token audience | Required access |
-|---|---|---|
-| OneLake / ADLS file read | `https://storage.azure.com` | Proxy runner needs OneLake read access on the workspace/Lakehouse |
-| Fabric SQL endpoint (TDS) | `https://database.windows.net` | Proxy runner needs read access on the Lakehouse SQL analytics endpoint |
-| Kusto / Eventhouse | `https://api.kusto.windows.net` | Proxy runner needs Viewer on the target Eventhouse database |
-| Published UDF invocation | `https://analysis.windows.net/powerbi/api` | Proxy runner needs permission to invoke the UDF |
+## 8. Security summary
 
-`AZURE_MAPS_KEY` is the only browser-facing credential in this local demo. It is
-stored only in `.env`, which is gitignored, and the proxy serves it through
-`/api/config`. Do not commit the key. For production, use Microsoft Entra
-authentication or SAS authentication for Azure Maps instead of a subscription
-key.
+The browser receives neither Fabric credentials nor a durable Azure Maps key. The App Service identity only invokes UDFs and requests Maps tokens, while all source access stays inside Fabric through managed Lakehouse connections and the Eventstream UDF runtime identity.
 
-UDF invocation URLs live in `config/constants.js` under `udf.<source>`. They
-are not anonymous URLs: published UDF endpoints are internet-reachable but
-always require a Microsoft Entra token for the UDF audience above.
-
-## Creating and publishing a UDF
-
-Create a **User Data Functions** item in the Fabric portal, open it in
-**Develop** mode, and paste the matching
-`fabric-udf/<scenario>_function_app.py` file. For Car parks, PMTiles, and
-Airports, use **Manage connections** to add the Lakehouse and set the alias to
-the alphanumeric value used in the code: `carparkslh`, `gpstracelh`, or
-`airportslh`. Car parks and PMTiles use `connectToFiles()`; Airports uses
-`connectToSql()`.
-
-For Eventstream, edit `CLUSTER_URI`, `DATABASE`, and `TABLE` at the top of
-`fabric-udf/eventstream_function_app.py` before pasting it. This function has
-no managed connection; after publishing, grant its runtime managed identity
-Kusto **Database Viewer** as described in the source guide.
-
-Choose **Publish**, wait for publishing to complete, switch to **Run only**,
-open the function's **... > Properties**, set **Public access = On**, and copy
-its Public URL into the matching `config/constants.js` `udf.<source>` value.
-Allow about two minutes between publishes.
-
-See the [common UDF guide](docs/common-udf-guide.md) and the relevant source
-guide for exact portal steps and permissions.
+See [Authorization](docs/auth.md) for the identity model, least-privilege grants, scopes, token audiences, and verification steps.
