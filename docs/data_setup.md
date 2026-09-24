@@ -113,7 +113,7 @@ For destination details, see [Add an Eventhouse destination to an eventstream](h
 2. Record the **Query URI**.
 3. Record the KQL database name.
 4. Record the table name `BicycleES`.
-5. Keep these values available for later configuration in `fabric-udf/eventstream_function_app.py` and `config/constants.js`.
+5. Keep these values available for the later step in [the setup guide](setup.md) where you edit `CLUSTER_URI`, `DATABASE`, and `TABLE` in `fabric-udf/eventstream_function_app.py`. These Eventhouse coordinates live only in that function file; the value that later goes into `config/constants.js` is the published Eventstream UDF's invocation URL, not these values.
 
 Complete the separate access step at [Grant the Eventstream UDF Kusto access](auth.md#grant-the-eventstream-udf-kusto-access).
 
