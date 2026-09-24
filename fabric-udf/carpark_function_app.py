@@ -6,7 +6,7 @@ import fabric.functions as fn
 
 udf = fn.UserDataFunctions()
 
-FILE_PATH = "GeoJson/Car_Parks.geojson"
+FILE_PATH = "Car_Parks.geojson"
 
 
 @udf.connection(argName="lakehouse", alias="carparkslh")

@@ -6,7 +6,7 @@ import fabric.functions as fn
 
 udf = fn.UserDataFunctions()
 
-FILE_PATH = "GeoJson/GpsTrace.pmtiles"
+FILE_PATH = "GpsTrace.pmtiles"
 
 
 @udf.connection(argName="lakehouse", alias="gpstracelh")

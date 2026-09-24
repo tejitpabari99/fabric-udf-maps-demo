@@ -103,18 +103,27 @@ test("package metadata excludes the SQL client and retains runtime dependencies"
   assert.doesNotThrow(() => require.resolve("pmtiles", { paths: [ROOT] }));
 });
 
-test("Fabric UDF files are byte-identical to the preserved implementation", () => {
+test("Unchanged Fabric UDF files stay byte-identical to the preserved implementation", () => {
   const files = [
     "fabric-udf/airports_function_app.py",
-    "fabric-udf/carpark_function_app.py",
     "fabric-udf/eventstream_function_app.py",
-    "fabric-udf/pmtiles_function_app.py",
   ];
   for (const file of files) {
     const expected = childProcess.execFileSync("git", ["cat-file", "--filters", `${PRESERVED_REF}:${file}`], { cwd: ROOT, encoding: null });
     const actual = fs.readFileSync(path.join(ROOT, ...file.split("/")));
     assert.deepEqual(actual, expected, `${file} differs from ${PRESERVED_REF}`);
   }
+});
+
+test("Lakehouse-file UDFs read from the Files root and keep their contracts", () => {
+  const carpark = read(path.join(ROOT, "fabric-udf", "carpark_function_app.py"));
+  const pmtiles = read(path.join(ROOT, "fabric-udf", "pmtiles_function_app.py"));
+  assert.match(carpark, /FILE_PATH = "Car_Parks\.geojson"/);
+  assert.match(pmtiles, /FILE_PATH = "GpsTrace\.pmtiles"/);
+  assert.doesNotMatch(carpark, /GeoJson\//);
+  assert.doesNotMatch(pmtiles, /GeoJson\//);
+  assert.match(carpark, /alias="carparkslh"[\s\S]*connectToFiles\(\)/);
+  assert.match(pmtiles, /alias="gpstracelh"[\s\S]*connectToFiles\(\)/);
 });
 
 test("PMTiles payload and HTTP route retain full and ranged archive serving", () => {
