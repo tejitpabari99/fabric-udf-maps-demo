@@ -5,7 +5,6 @@ const el = (id) => document.getElementById(id);
 const statusEl = el("status");
 const statusPill = el("status-pill");
 const sourceSelect = el("source-select");
-const methodSelect = el("method-select");
 const rtGroup = el("rt-group");
 const rtToggle = el("rt-toggle");
 const rtInterval = el("rt-interval");
@@ -140,11 +139,10 @@ function clearMap() {
 async function loadData() {
   clearMap();
   const src = currentSource();
-  const method = methodSelect.value;
-  statusPill.textContent = `${src.label} · ${method}`;
-  setStatus(`Loading ${src.label} via ${method}…`, false);
+  statusPill.textContent = src.label;
+  setStatus(`Loading ${src.label}…`, false);
   try {
-    const res = await fetch(`./api/data?source=${encodeURIComponent(src.id)}&method=${encodeURIComponent(method)}`);
+    const res = await fetch(`./api/data?source=${encodeURIComponent(src.id)}`);
     const bodyText = await res.text();
     if (!res.ok) {
       let detail = bodyText; try { detail = JSON.parse(bodyText).error || bodyText; } catch (_) {}
@@ -155,11 +153,11 @@ async function loadData() {
     const renderer = renderers[format];
     if (!renderer) throw new Error(`No renderer for format '${format}'.`);
     const count = await renderer(payload);
-    statusPill.textContent = `${src.label} · ${method}${count != null ? ` · ${count}` : ""}`;
+    statusPill.textContent = `${src.label}${count != null ? ` · ${count}` : ""}`;
     setStatus(null);
   } catch (err) {
     console.error(err);
-    statusPill.textContent = `${src.label} · ${method} · error`;
+    statusPill.textContent = `${src.label} · error`;
     setStatus(err.message, true);
   }
 }
@@ -174,19 +172,8 @@ function syncRealtime() {
   if (on) rtTimer = setInterval(loadData, parseInt(rtInterval.value, 10));
 }
 
-// ----- dropdown wiring -----
-function buildMethods(src) {
-  methodSelect.innerHTML = "";
-  for (const m of src.methods) {
-    const opt = document.createElement("option");
-    opt.value = m.id; opt.textContent = m.label;
-    methodSelect.appendChild(opt);
-  }
-}
-
 function onSourceChange() {
   const src = currentSource();
-  buildMethods(src);
   rtGroup.classList.toggle("hidden", !src.realtime);
   rtToggle.checked = false;
   rtInterval.disabled = true;
@@ -195,16 +182,8 @@ function onSourceChange() {
   loadData();
 }
 
-function onMethodChange() {
-  // Update the source pill instantly, then load.
-  const src = currentSource();
-  statusPill.textContent = `${src.label} · ${methodSelect.value}`;
-  loadData();
-}
-
 reloadBtn.addEventListener("click", loadData);
 sourceSelect.addEventListener("change", onSourceChange);
-methodSelect.addEventListener("change", onMethodChange);
 rtToggle.addEventListener("change", syncRealtime);
 rtInterval.addEventListener("change", syncRealtime);
 
@@ -219,7 +198,6 @@ rtInterval.addEventListener("change", syncRealtime);
       opt.value = s.id; opt.textContent = s.label;
       sourceSelect.appendChild(opt);
     }
-    if (SOURCES[0]) buildMethods(SOURCES[0]);
     const maps = cfg.maps || {};
     if (maps.authType === "key" && !maps.key) {
       setStatus("No Azure Maps auth configured (set AZURE_MAPS_CLIENT_ID for Entra, or AZURE_MAPS_KEY for local).", true);
