@@ -137,7 +137,7 @@ Verify the assignment from the Maps account's **Access control (IAM)** → **Rol
 
 ## Local-development authentication boundary
 
-Production uses the App Service system-assigned managed identity for both UDF invocation and Azure Maps token acquisition. Do not configure a subscription key as the hosted application's Maps authentication path.
+Production uses the App Service system-assigned managed identity for both UDF invocation and Azure Maps token acquisition. The subscription-key fallback is local-development-only and must not be configured as the hosted application's Maps authentication path.
 
 An Azure Maps subscription key may be used only for local development if the current application still supports that fallback. Do not place a key value in this guide, committed configuration, browser-visible configuration, or production App Service settings. Secret creation, secret-based UDF invocation, and cross-tenant application registration are outside this customer path. Follow [Azure Maps authentication guidance](https://learn.microsoft.com/en-us/azure/azure-maps/how-to-manage-authentication) when evaluating local-only authentication.
 
@@ -151,7 +151,7 @@ Complete this checklist after all administrators finish their assigned procedure
 - [ ] `get_car_parks`, `get_gpstrace_pmtiles`, and `get_airports` succeed in Fabric Run only mode through `carparkslh`, `gpstracelh`, and `airportslh`.
 - [ ] `get_bikes` succeeds in Fabric Run only mode after its runtime principal receives Kusto Database Viewer on the exact Eventhouse/KQL database.
 - [ ] Azure Maps account → **Access control (IAM)** → **Role assignments** lists the Web App identity as Azure Maps Data Reader at the Maps account scope.
-- [ ] In the hosted application, `/api/maps-token` succeeds and the map authenticates without a production subscription key.
+- [ ] In the hosted application, `/api/maps-token` succeeds and the map authenticates without using the local-development-only subscription-key fallback.
 - [ ] The hosted car-park call through `/api/data?source=carpark`, airports call through `/api/data?source=airports`, Eventstream call through `/api/data?source=eventstream`, and PMTiles call through `/api/pmtiles-archive` all succeed.
 
 | Symptom | Most likely authorization owner | What that owner should verify |
@@ -167,7 +167,7 @@ Complete this checklist after all administrators finish their assigned procedure
 
 The Node BFF exposes only the fixed application routes `/api/config`, `/api/data?source=<id>`, `/api/maps-token`, and `/api/pmtiles-archive`; it limits requests to the four known UDF-backed sources and does not offer arbitrary Fabric paths, source queries, or UDF URLs.
 
-The browser receives map payloads and a short-lived Azure Maps token, but it never receives a Fabric invocation token, Lakehouse credential, Eventhouse credential, managed-connection credential, or production Azure Maps key.
+The browser receives map payloads and a short-lived Azure Maps token, but it never receives a Fabric invocation token, Lakehouse credential, Eventhouse credential, managed-connection credential, or the local-development-only Azure Maps key fallback.
 
 The App Service identity receives only Execute on each UDF item and Azure Maps Data Reader on the individual Maps account. It receives no Lakehouse workspace role, OneLake role, SQL grant, or Kusto database role.
 

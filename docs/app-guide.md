@@ -1,6 +1,6 @@
 # Deploy and configure the application
 
-> **Journey:** [README](../README.md) → prerequisite: [UDF setup](setup.md) → **App deployment** → [Authorization](auth.md)
+> **Journey:** [README](../README.md) → [Data setup](data_setup.md) + [UDF guide](udf-guide.md) → [UDF setup](setup.md) → **App deployment** → [Authorization](auth.md)
 
 ## 1 Before you begin
 
@@ -17,7 +17,7 @@ Keep the Azure resources and Fabric workspace in the same Microsoft Entra tenant
 3. After deployment finishes, open the Azure Maps account and select **Settings** → **Authentication**.
 4. Copy the **Client ID**, which can also be described as the unique account ID. This identifier is not a secret and will become `mapsClientId` in `config/constants.js`.
 
-Production authentication uses Microsoft Entra, the App Service system-assigned managed identity, and **Azure Maps Data Reader** on this Maps account. It never uses an Azure Maps subscription key. See [Manage authentication in Azure Maps](https://learn.microsoft.com/en-us/azure/azure-maps/how-to-manage-authentication).
+Production authentication uses Microsoft Entra, the App Service system-assigned managed identity, and **Azure Maps Data Reader** on this Maps account. The Azure Maps subscription-key fallback is local-development-only and is never used by this production path. See [Manage authentication in Azure Maps](https://learn.microsoft.com/en-us/azure/azure-maps/how-to-manage-authentication).
 
 ## 3 Obtain and configure the application source
 
@@ -27,7 +27,7 @@ Production authentication uses Microsoft Entra, the App Service system-assigned 
 4. Replace the four Public URL values `udf.carpark`, `udf.pmtiles`, `udf.airports`, and `udf.eventstream` with the URLs copied while completing [UDF setup](setup.md). Leave the fixed `udf.resource` value unchanged.
 5. Review the changes and commit them to the `main` branch through the GitHub web interface, using your organization's normal review process if the branch is protected.
 
-Do not add passwords, tokens, subscription keys, connection strings, or other secrets to `config/constants.js` or any repository file. Azure Maps Client IDs and Fabric UDF Public URLs are non-secret identifiers, but your organization's policy may still require a private fork or another private customer-controlled repository.
+Do not add passwords, tokens, connection strings, the local-development-only Azure Maps subscription key, or other secrets to `config/constants.js` or any repository file. Azure Maps Client IDs and Fabric UDF Public URLs are non-secret identifiers, but your organization's policy may still require a private fork or another private customer-controlled repository.
 
 ## 4 Create a Linux Node Web App
 
@@ -90,7 +90,7 @@ Do not substitute source-data roles for these grants. The App Service identity i
 
 1. From the Web App **Overview** page, select the **Default domain** link and confirm that the application loads over HTTPS.
 2. Append `/api/config` to the default domain in the browser address bar and confirm an HTTP `200` response.
-3. Inspect the JSON and confirm that `maps.authType` is `aad`, `maps.clientId` matches the Azure Maps account Client ID, no Maps key is present, and `sources` contains exactly four entries: `carpark`, `pmtiles`, `airports`, and `eventstream`.
+3. Inspect the JSON and confirm that `maps.authType` is `aad`, `maps.clientId` matches the Azure Maps account Client ID, no local-development-only Maps key is present, and `sources` contains exactly four entries: `carpark`, `pmtiles`, `airports`, and `eventstream`.
 4. Confirm that each source presents one UDF-backed behavior, that no method selector is present, and that the response exposes no Fabric token or source credential.
 5. Open `/api/maps-token` in the browser and confirm that the request succeeds. Treat the returned short-lived token as sensitive and do not copy it into documentation or configuration.
 6. Return to the application and verify that car parks, airports, Eventstream bicycles, and PMTiles all render on the map.
@@ -116,4 +116,4 @@ Do not substitute source-data roles for these grants. The App Service identity i
 
 ## 11 Next step
 
-Continue to [Authorization and identity](auth.md) to finish any outstanding grants, then return to the [README](../README.md) and complete its verification checklist.
+Continue to [Authorization and identity](auth.md) to finish any outstanding grants, then return to the [README](../README.md) for the completed solution overview.

@@ -1,6 +1,6 @@
 # Fabric User Data Functions
 
-> **Journey:** [Back to the project README](../README.md) → prerequisites: complete [data setup](./data_setup.md) and read this conceptual guide → [create and configure the four UDFs](./setup.md) → continue to the application and authorization guides.
+> **Journey:** [README](../README.md) → [Data setup](data_setup.md) + **UDF guide** → [UDF setup](setup.md) → [App deployment](app-guide.md) → [Authorization](auth.md)
 
 This guide explains the Fabric User Data Function concepts used by the solution before you create the UDF items. Source-specific creation and configuration steps belong in [Set up the UDFs](./setup.md), and permission-grant procedures belong in [Authorization and identity](./auth.md).
 

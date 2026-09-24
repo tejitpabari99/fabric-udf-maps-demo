@@ -36,16 +36,16 @@ Source data access stays inside Fabric through three managed Lakehouse connectio
 
 For PMTiles, the UDF returns the archive to the BFF, the BFF exposes archive bytes through an HTTP Range relay, and the browser performs vector-tile decoding.
 
-See [the detailed architecture](docs/setup.md#architecture) for the end-to-end request flow.
+See [the detailed architecture](docs/setup.md#2-architecture) for the end-to-end request flow.
 
 ## 5. UDF-only source table
 
 | Source | Fabric location | UDF file / function | Rendered result |
 | --- | --- | --- | --- |
-| [Car parks](docs/setup.md#car-parks-udf) | Lakehouse file `Files/GeoJson/Car_Parks.geojson` | `carpark_function_app.py` / `get_car_parks` | polygons |
-| [GPS trace](docs/setup.md#pmtiles-udf) | Lakehouse file `Files/GeoJson/GpsTrace.pmtiles` | `pmtiles_function_app.py` / `get_gpstrace_pmtiles` | vector tiles (PMTiles) |
-| [Airports](docs/setup.md#airports-udf) | Lakehouse SQL table `dbo.airports` | `airports_function_app.py` / `get_airports` | points |
-| [Bicycles](docs/setup.md#eventstream-udf) | Eventstream → Eventhouse/KQL table `BicycleES` | `eventstream_function_app.py` / `get_bikes` | points (real-time) |
+| [Car parks](docs/setup.md#6-car-parks-udf) | Lakehouse file `Files/GeoJson/Car_Parks.geojson` | `carpark_function_app.py` / `get_car_parks` | polygons |
+| [GPS trace](docs/setup.md#7-pmtiles-udf) | Lakehouse file `Files/GeoJson/GpsTrace.pmtiles` | `pmtiles_function_app.py` / `get_gpstrace_pmtiles` | vector tiles (PMTiles) |
+| [Airports](docs/setup.md#8-airports-udf) | Lakehouse SQL table `dbo.airports` | `airports_function_app.py` / `get_airports` | points |
+| [Bicycles](docs/setup.md#9-eventstream-udf) | Eventstream → Eventhouse/KQL table `BicycleES` | `eventstream_function_app.py` / `get_bikes` | points (real-time) |
 
 ## 6. Expected result
 
@@ -53,7 +53,7 @@ The deployed application renders each Fabric source as an interactive Azure Maps
 
 ![Car parks rendered on Azure Maps](docs/images/carpark.png)
 
-See the matching setup outcomes for [GPS trace vector tiles](docs/setup.md#pmtiles-udf), [airport points](docs/setup.md#airports-udf), and [real-time bicycle points](docs/setup.md#eventstream-udf).
+See the matching setup outcomes for [GPS trace vector tiles](docs/setup.md#7-pmtiles-udf), [airport points](docs/setup.md#8-airports-udf), and [real-time bicycle points](docs/setup.md#9-eventstream-udf).
 
 ## 7. Repository layout
 
@@ -80,6 +80,6 @@ docs/
 
 ## 8. Security summary
 
-The browser receives neither Fabric credentials nor a durable Azure Maps key. The App Service identity only invokes UDFs and requests Maps tokens, while all source access stays inside Fabric through managed Lakehouse connections and the Eventstream UDF runtime identity.
+The browser receives neither Fabric credentials nor the local-development-only Azure Maps key fallback. The App Service identity only invokes UDFs and requests Maps tokens, while all source access stays inside Fabric through managed Lakehouse connections and the Eventstream UDF runtime identity.
 
 See [Authorization](docs/auth.md) for the identity model, least-privilege grants, scopes, token audiences, and verification steps.

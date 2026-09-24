@@ -1,4 +1,4 @@
-**Journey:** [README](../README.md) → **Data setup** → [UDF guide](udf-guide.md) → [Solution setup](setup.md)
+> **Journey:** [README](../README.md) → **Data setup** + [UDF guide](udf-guide.md) → [UDF setup](setup.md) → [App deployment](app-guide.md) → [Authorization](auth.md)
 
 # Fabric data setup
 
@@ -19,7 +19,7 @@ All customer-uploaded files come only from the repository folder `docs/data`. In
 
 - Confirm that you have access to a Fabric capacity-backed or trial-backed workspace and can create a workspace, Lakehouse, Eventstream, Eventhouse/KQL database, and tables.
 - If you need a new workspace, follow [Create a workspace](https://learn.microsoft.com/en-us/fabric/fundamentals/create-workspaces).
-- For role and ownership questions, see [Who performs each step](auth.md#who-performs-each-step).
+- For role and ownership questions, see [Required administrator capabilities](auth.md#required-administrator-capabilities).
 - Choose names that meet your organization's naming standards, and keep every Fabric item described in this guide in the same workspace.
 
 ## 3. Create or choose the Fabric workspace

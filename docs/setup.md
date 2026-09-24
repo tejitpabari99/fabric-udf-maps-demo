@@ -52,7 +52,7 @@ At runtime, `server/lib/config.js` loads `.env` for local development. A non-emp
 | `UDF_AIRPORTS_ENDPOINT` | `udf.airports` | Airports UDF Public URL. |
 | `UDF_EVENTSTREAM_ENDPOINT` | `udf.eventstream` | Eventstream UDF Public URL. |
 
-Use environment overrides when the hosted deployment must differ from the checked-in non-secret defaults. Never place secrets, credentials, or Maps keys in `config/constants.js`.
+Use environment overrides when the hosted deployment must differ from the checked-in non-secret defaults. Never place secrets or credentials in `config/constants.js`; the Maps key fallback is local-development-only and must never be stored there.
 
 ## 5. Reusable UDF creation pattern
 
