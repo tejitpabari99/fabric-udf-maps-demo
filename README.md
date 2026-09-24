@@ -29,7 +29,14 @@ Complete [Data setup](docs/data_setup.md) first, then follow [UDF setup](docs/ud
 
 ## 4. Architecture at a glance
 
-`Browser → fixed /api/* routes → Node app → published Fabric UDFs`
+```mermaid
+flowchart LR
+    Browser -->|"/api/*"| Node["Node app"]
+    Node -->|"Invokes published Fabric UDFs<br/>with an Entra token"| UDFs["Published Fabric UDFs"]
+    UDFs --> Fabric["Fabric<br/>(Lakehouse / Eventhouse)"]
+    Node -->|"Requests"| Token["Azure Maps token"]
+    Browser -->|"Renders data and tiles"| Maps["Azure Maps"]
+```
 
 The browser uses `/api/config`, `/api/data?source=`, `/api/maps-token`, and `/api/pmtiles-archive`. It receives only map data and a short-lived Azure Maps token.
 

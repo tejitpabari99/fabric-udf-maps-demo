@@ -22,15 +22,6 @@ The lifecycle is **Develop → Publish → Run only → Public access on → inv
 
 The browser requests configuration, data, tokens, and PMTiles byte ranges from the Node app. The Node app invokes published Fabric UDFs with a Microsoft Entra token, and the UDFs read the configured Fabric sources. The browser never receives Fabric tokens.
 
-```mermaid
-flowchart LR
-    Browser -->|"/api/*"| Node["Node app"]
-    Node -->|"Invokes published Fabric UDFs<br/>with an Entra token"| UDFs["Published Fabric UDFs"]
-    UDFs --> Fabric["Fabric<br/>(Lakehouse / Eventhouse)"]
-    Node -->|"Requests"| Token["Azure Maps token"]
-    Browser -->|"Renders data and tiles"| Maps["Azure Maps"]
-```
-
 | Route | Purpose |
 | --- | --- |
 | `/api/config` | Returns the map configuration. |
