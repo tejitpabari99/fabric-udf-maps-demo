@@ -1,10 +1,10 @@
 # Deploy and configure the application
 
-> **Journey:** [README](../README.md) → [Data setup](data_setup.md) + [UDF guide](udf-guide.md) → [UDF setup](setup.md) → **App deployment** → [Authorization](auth.md)
+> **Journey:** [Data setup](data_setup.md) → [UDF setup](udf-setup.md) → **App deployment** → [Authorization](auth.md)
 
 ## 1 Prerequisites
 
-Complete [UDF setup](setup.md). You need:
+Complete [UDF setup](udf-setup.md). You need:
 
 - An Azure subscription with permission to create an Azure Maps account and a Linux Web App.
 - Write access to this repository or your fork.
@@ -25,7 +25,7 @@ Do not use an Azure Maps subscription key in production. For reference, see [Man
 1. Fork the repository or use a repository where you have write access.
 2. In the GitHub web editor, open `config/constants.js`.
 3. Set `mapsClientId` to the Azure Maps Client ID.
-4. Set these values to the Public URLs from [UDF setup](setup.md):
+4. Set these values to the Public URLs from [UDF setup](udf-setup.md):
    - `udf.carpark`
    - `udf.pmtiles`
    - `udf.airports`

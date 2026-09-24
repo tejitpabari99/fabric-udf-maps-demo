@@ -1,6 +1,6 @@
 # Authorization and identity
 
-> **Journey:** [README](../README.md) → prerequisites: [Data setup](data_setup.md) + [UDF guide](udf-guide.md) → [UDF setup](setup.md) → [App deployment](app-guide.md) → **Authorization**
+> **Journey:** [Data setup](data_setup.md) → [UDF setup](udf-setup.md) → [App deployment](app-guide.md) → **Authorization**
 
 Configure each identity with only the permissions below, then verify every grant. Return to the [README](../README.md) after completing these steps.
 

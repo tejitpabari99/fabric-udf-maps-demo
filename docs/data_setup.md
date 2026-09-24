@@ -1,6 +1,6 @@
-> **Journey:** [README](../README.md) → **Data setup** → [UDF guide](udf-guide.md) → [UDF setup](setup.md) → [App deployment](app-guide.md) → [Authorization](auth.md)
-
 # Fabric data setup
+
+> **Journey:** **Data setup** → [UDF setup](udf-setup.md) → [App deployment](app-guide.md) → [Authorization](auth.md)
 
 ## Prerequisites
 
@@ -20,7 +20,7 @@ Create all items for this sample in a single workspace.
 
 Note: The UDF assumes files are located at Files/. Change the location in the UDF if you store them elsewhere.
 
-For reference, see [Create a workspace](https://learn.microsoft.com/en-us/fabric/fundamentals/create-workspaces) and [Use PMTiles with Azure Maps](https://learn.microsoft.com/en-us/azure/azure-maps/add-custom-protocol-pmtiles).
+For reference, see [Create a workspace](https://learn.microsoft.com/en-us/fabric/fundamentals/create-workspaces).
 
 ## Create `dbo.airports` from CSV
 
@@ -55,4 +55,4 @@ For reference, see [Transform and route sample bike-sharing data](https://learn.
 - [ ] `BicycleES` receives Bicycles sample events with numeric `Latitude` and `Longitude`.
 - [ ] The Eventhouse Query URI, database name, and table name are recorded.
 
-Continue to the [UDF guide](udf-guide.md), then complete [solution setup](setup.md).
+Continue to [UDF setup](udf-setup.md).
