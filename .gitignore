@@ -10,6 +10,9 @@ fabric-udf/.venv/
 __pycache__/
 *.pyc
 
+# Dev-loop artifacts (PRDs, tasks, reviews)
+.dev/
+
 # OS
 .DS_Store
 Thumbs.db
